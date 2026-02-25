@@ -15,6 +15,7 @@ import type {
   ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
+import { MAX_SKILL_INPUT_LENGTH } from '../../SecurityUtils.js';
 
 /** Response shape from the OpenWeatherMap current weather endpoint. */
 interface WeatherApiResponse {
@@ -117,10 +118,14 @@ export class WeatherApiSkill extends SkillBase {
             );
           }
 
+          if (location.length > MAX_SKILL_INPUT_LENGTH) {
+            return new SwaigFunctionResult('Input is too long.');
+          }
+
           const apiKey = process.env['WEATHER_API_KEY'];
           if (!apiKey) {
             return new SwaigFunctionResult(
-              'Weather service is not configured. The WEATHER_API_KEY environment variable is missing.',
+              'Service is not configured. Please contact your administrator.',
             );
           }
 

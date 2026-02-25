@@ -36,10 +36,15 @@ export class AgentServer {
       c.res.headers.set('X-Frame-Options', 'DENY');
       c.res.headers.set('X-XSS-Protection', '1; mode=block');
       c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      c.res.headers.set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+      c.res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     });
 
-    // CORS
-    this._app.use('*', cors({ origin: '*', credentials: true }));
+    // CORS (configurable via env)
+    const corsOrigins = process.env['SWML_CORS_ORIGINS'];
+    const corsOrigin = corsOrigins ? corsOrigins.split(',').map((o: string) => o.trim()) : '*';
+    const corsCredentials = corsOrigin !== '*';
+    this._app.use('*', cors({ origin: corsOrigin, credentials: corsCredentials }));
 
     // Global health endpoints
     this._app.get('/health', (c) => c.json({ status: 'ok' }));

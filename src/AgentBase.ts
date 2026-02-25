@@ -16,6 +16,7 @@ import { SwaigFunction, type SwaigHandler, type SwaigFunctionOptions } from './S
 import { SwaigFunctionResult } from './SwaigFunctionResult.js';
 import { ContextBuilder } from './ContextBuilder.js';
 import { getLogger, suppressAllLogs } from './Logger.js';
+import { safeAssign, filterSensitiveHeaders, redactUrl, isValidHostname } from './SecurityUtils.js';
 import { SkillManager } from './skills/SkillManager.js';
 import type { SkillBase } from './skills/SkillBase.js';
 import type {
@@ -96,6 +97,8 @@ export class AgentBase {
   private _proxyUrlBase: string | null = process.env['SWML_PROXY_URL_BASE'] ?? null;
   private _proxyUrlBaseFromEnv = !!process.env['SWML_PROXY_URL_BASE'];
   private _proxyDebug = process.env['SWML_PROXY_DEBUG'] === 'true';
+  private _trustProxyHeaders = process.env['SWML_TRUST_PROXY_HEADERS'] === 'true';
+  private _enforceHttps = process.env['SWML_ENFORCE_HTTPS'] === 'true';
 
   /** Structured logger instance for this agent, configurable via SIGNALWIRE_LOG_LEVEL. */
   protected log = getLogger('AgentBase');
@@ -114,7 +117,11 @@ export class AgentBase {
     this.name = opts.name;
     this.route = (opts.route ?? '/').replace(/\/+$/, '') || '/';
     this.host = opts.host ?? '0.0.0.0';
-    this.port = opts.port ?? parseInt(process.env['PORT'] ?? '3000', 10);
+    const parsedPort = opts.port ?? parseInt(process.env['PORT'] ?? '3000', 10);
+    if (isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      throw new Error(`Invalid port: ${opts.port ?? process.env['PORT']}. Must be between 1 and 65535.`);
+    }
+    this.port = parsedPort;
     this.agentId = opts.agentId ?? randomBytes(8).toString('hex');
     this.autoAnswer = opts.autoAnswer ?? true;
     this._recordCall = opts.recordCall ?? false;
@@ -142,7 +149,7 @@ export class AgentBase {
         this.basicAuthCreds = [envUser, envPass];
         this.basicAuthSource = 'environment';
       } else {
-        this.basicAuthCreds = [this.name, randomBytes(8).toString('hex')];
+        this.basicAuthCreds = [this.name, randomBytes(16).toString('hex')];
         this.basicAuthSource = 'generated';
       }
     }
@@ -371,7 +378,7 @@ export class AgentBase {
    * @returns This agent instance for chaining.
    */
   setParams(params: Record<string, unknown>): this {
-    Object.assign(this.params, params);
+    safeAssign(this.params, params);
     return this;
   }
 
@@ -391,7 +398,7 @@ export class AgentBase {
    * @returns This agent instance for chaining.
    */
   updateGlobalData(data: Record<string, unknown>): this {
-    Object.assign(this.globalData, data);
+    safeAssign(this.globalData, data);
     return this;
   }
 
@@ -440,7 +447,7 @@ export class AgentBase {
    * @returns This agent instance for chaining.
    */
   setPromptLlmParams(params: Record<string, unknown>): this {
-    Object.assign(this.promptLlmParams, params);
+    safeAssign(this.promptLlmParams, params);
     return this;
   }
 
@@ -450,7 +457,7 @@ export class AgentBase {
    * @returns This agent instance for chaining.
    */
   setPostPromptLlmParams(params: Record<string, unknown>): this {
-    Object.assign(this.postPromptLlmParams, params);
+    safeAssign(this.postPromptLlmParams, params);
     return this;
   }
 
@@ -639,7 +646,7 @@ export class AgentBase {
       if (Object.keys(skill.swaigFields).length > 0) {
         const fn = this.toolRegistry.get(toolDef.name);
         if (fn instanceof SwaigFunction) {
-          Object.assign(fn.extraFields, skill.swaigFields);
+          safeAssign(fn.extraFields, skill.swaigFields);
         }
       }
     }
@@ -704,7 +711,7 @@ export class AgentBase {
    * @returns This agent instance for chaining.
    */
   addSwaigQueryParams(params: Record<string, string>): this {
-    Object.assign(this.swaigQueryParams, params);
+    safeAssign(this.swaigQueryParams, params);
     return this;
   }
 
@@ -724,6 +731,8 @@ export class AgentBase {
   private detectProxyFromRequest(c: any): void {
     // Never override env var setting
     if (this._proxyUrlBaseFromEnv) return;
+    // Only trust proxy headers when explicitly enabled
+    if (!this._trustProxyHeaders) return;
 
     const get = (name: string): string | undefined =>
       c.req.header(name) ?? undefined;
@@ -743,12 +752,14 @@ export class AgentBase {
     if (forwarded) {
       const hostMatch = forwarded.match(/host=([^;,\s]+)/i);
       const protoMatch = forwarded.match(/proto=([^;,\s]+)/i);
-      if (hostMatch) {
+      if (hostMatch && isValidHostname(hostMatch[1])) {
         const proto = protoMatch ? protoMatch[1] : 'https';
         const url = `${proto}://${hostMatch[1]}`;
         if (this._proxyDebug) this.log.debug(`Proxy detected from Forwarded header: ${url}`);
         this._proxyUrlBase = url;
         return;
+      } else if (hostMatch) {
+        this.log.warn(`Invalid hostname in Forwarded header: ${hostMatch[1]}`);
       }
     }
 
@@ -802,7 +813,7 @@ export class AgentBase {
       if (includeAuth) base = this.insertAuth(base);
       return base;
     }
-    const protocol = 'http';
+    const protocol = this._enforceHttps ? 'https' : 'http';
     const hostPart = this.host === '0.0.0.0' ? 'localhost' : this.host;
     let base = `${protocol}://${hostPart}:${this.port}`;
     if (includeAuth) base = this.insertAuth(base);
@@ -926,7 +937,7 @@ export class AgentBase {
           if (token) urlParams['__token'] = token;
           entry['web_hook_url'] = this.buildWebhookUrl('swaig', urlParams);
         }
-        Object.assign(entry, fn.extraFields);
+        safeAssign(entry, fn.extraFields);
         functions.push(entry);
       } else {
         // Raw dict (DataMap) - use as-is
@@ -1060,7 +1071,7 @@ export class AgentBase {
           if (Object.keys(skill.swaigFields).length > 0) {
             const fn = copy.toolRegistry.get(toolDef.name);
             if (fn instanceof SwaigFunction) {
-              Object.assign(fn.extraFields, skill.swaigFields);
+              safeAssign(fn.extraFields, skill.swaigFields);
             }
           }
         }
@@ -1099,12 +1110,15 @@ export class AgentBase {
       c.res.headers.set('X-Frame-Options', 'DENY');
       c.res.headers.set('X-XSS-Protection', '1; mode=block');
       c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      c.res.headers.set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+      c.res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     });
 
     // Request size limit
     app.use('*', async (c, next) => {
       const contentLength = c.req.header('content-length');
-      if (contentLength && parseInt(contentLength, 10) > maxRequestSize) {
+      const size = parseInt(contentLength ?? '', 10);
+      if (contentLength && (isNaN(size) || size > maxRequestSize)) {
         return c.json({ error: 'Request too large' }, 413);
       }
       await next();
@@ -1130,14 +1144,22 @@ export class AgentBase {
       if (maxPerMinute > 0) {
         const hits = new Map<string, { count: number; resetAt: number }>();
         app.use('*', async (c, next) => {
-          const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim()
-            ?? c.req.header('x-real-ip')
-            ?? 'unknown';
+          const ip = this._trustProxyHeaders
+            ? (c.req.header('x-forwarded-for')?.split(',')[0].trim()
+              ?? c.req.header('x-real-ip')
+              ?? 'unknown')
+            : 'unknown';
           const now = Date.now();
           let entry = hits.get(ip);
           if (!entry || now >= entry.resetAt) {
             entry = { count: 0, resetAt: now + 60_000 };
             hits.set(ip, entry);
+          }
+          // Cleanup if map grows too large
+          if (hits.size > 10000) {
+            for (const [k, v] of hits) {
+              if (now >= v.resetAt) hits.delete(k);
+            }
           }
           entry.count++;
           if (entry.count > maxPerMinute) {
@@ -1151,7 +1173,24 @@ export class AgentBase {
     // CORS (configurable via env)
     const corsOrigins = process.env['SWML_CORS_ORIGINS'];
     const corsOrigin = corsOrigins ? corsOrigins.split(',').map(o => o.trim()) : '*';
-    app.use('*', cors({ origin: corsOrigin, credentials: true }));
+    const corsCredentials = corsOrigin !== '*';
+    app.use('*', cors({ origin: corsOrigin, credentials: corsCredentials }));
+
+    // CSRF protection (optional, gated by env)
+    if (process.env['SWML_CSRF_PROTECTION'] === 'true') {
+      const allowedOrigins = corsOrigins
+        ? new Set(corsOrigins.split(',').map(o => o.trim().toLowerCase()))
+        : null;
+      app.use('*', async (c, next) => {
+        if (c.req.method === 'POST') {
+          const origin = c.req.header('origin');
+          if (origin && allowedOrigins && !allowedOrigins.has(origin.toLowerCase())) {
+            return c.json({ error: 'Origin not allowed' }, 403);
+          }
+        }
+        await next();
+      });
+    }
 
     // Auth middleware
     const [user, pass] = this.basicAuthCreds;
@@ -1181,8 +1220,9 @@ export class AgentBase {
         const queryParams: Record<string, string> = {};
         const url = new URL(c.req.url);
         url.searchParams.forEach((v: string, k: string) => { queryParams[k] = v; });
-        const headers: Record<string, string> = {};
-        c.req.raw.headers.forEach((v: string, k: string) => { headers[k] = v; });
+        const rawHeaders: Record<string, string> = {};
+        c.req.raw.headers.forEach((v: string, k: string) => { rawHeaders[k] = v; });
+        const headers = filterSensitiveHeaders(rawHeaders);
         await this.dynamicConfigCallback(queryParams, body, headers, agentToUse);
         reqLog.debug('dynamic_config_complete');
       }
@@ -1249,7 +1289,7 @@ export class AgentBase {
         return c.json(result);
       } catch (err) {
         reqLog.error('function_execution_error', { error: err instanceof Error ? err.message : String(err) });
-        throw err;
+        return c.json({ error: 'Function execution failed' }, 500);
       }
     };
 
@@ -1318,8 +1358,12 @@ export class AgentBase {
 
     const { serve: honoServe } = await import('@hono/node-server');
     const app = this.getApp();
-    this.log.info(`Agent '${this.name}' running at http://${this.host}:${this.port}${this.route}`);
+    const listenUrl = `http://${this.host}:${this.port}${this.route}`;
+    this.log.info(`Agent '${this.name}' running at ${listenUrl}`);
     this.log.info(`Auth: ${this.basicAuthCreds[0]}:**** (source: ${this.basicAuthSource})`);
+    if (this._proxyUrlBase) {
+      this.log.info(`Proxy URL: ${redactUrl(this._proxyUrlBase)}`);
+    }
     honoServe({ fetch: app.fetch, port: this.port, hostname: this.host });
   }
 

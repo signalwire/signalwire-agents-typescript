@@ -99,4 +99,28 @@ describe('AgentServer', () => {
     });
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
   });
+
+  it('CORS wildcard does not set credentials header', async () => {
+    const saved = process.env['SWML_CORS_ORIGINS'];
+    delete process.env['SWML_CORS_ORIGINS'];
+    try {
+      const server = new AgentServer();
+      const app = server.getApp();
+      const res = await app.request('/health', {
+        headers: { 'Origin': 'https://example.com' },
+      });
+      const credHeader = res.headers.get('Access-Control-Allow-Credentials');
+      expect(credHeader).toBeNull();
+    } finally {
+      if (saved) process.env['SWML_CORS_ORIGINS'] = saved;
+    }
+  });
+
+  it('CSP and Permissions-Policy headers present', async () => {
+    const server = new AgentServer();
+    const app = server.getApp();
+    const res = await app.request('/health');
+    expect(res.headers.get('Content-Security-Policy')).toContain("default-src 'none'");
+    expect(res.headers.get('Permissions-Policy')).toContain('camera=()');
+  });
 });

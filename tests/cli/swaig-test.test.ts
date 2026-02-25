@@ -74,6 +74,18 @@ describe('agent introspection', () => {
   });
 });
 
+describe('agent-loader file extension validation', () => {
+  it('rejects unsupported file extensions', async () => {
+    const { loadAgent } = await import('../../src/cli/agent-loader.js');
+    await expect(loadAgent('/tmp/agent.txt')).rejects.toThrow('Unsupported file extension');
+  });
+
+  it('rejects .json files', async () => {
+    const { loadAgent } = await import('../../src/cli/agent-loader.js');
+    await expect(loadAgent('/tmp/agent.json')).rejects.toThrow('Unsupported file extension');
+  });
+});
+
 describe('agent-loader duck typing', () => {
   it('AgentBase instances pass duck-type check', () => {
     const agent = new AgentBase({ name: 'test', route: '/test' });

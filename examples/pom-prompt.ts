@@ -11,7 +11,10 @@ import { AgentBase, SwaigFunctionResult } from '../src/index.js';
 export const agent = new AgentBase({
   name: 'support-agent',
   route: '/',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 // Build a structured prompt with POM

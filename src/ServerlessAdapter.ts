@@ -85,9 +85,12 @@ export class ServerlessAdapter {
     const path = event.rawPath ?? event.path ?? '/';
     const headers = event.headers ?? {};
 
-    // Build URL
-    const host = headers['host'] ?? 'localhost';
-    const proto = headers['x-forwarded-proto'] ?? 'https';
+    // Build URL — prefer platform env vars over client headers
+    const host = process.env['AWS_LAMBDA_FUNCTION_URL']
+      ? new URL(process.env['AWS_LAMBDA_FUNCTION_URL']).hostname
+      : (headers['host'] ?? 'localhost');
+    const proto = process.env['AWS_LAMBDA_FUNCTION_URL'] ? 'https'
+      : (headers['x-forwarded-proto'] ?? 'https');
     let url = `${proto}://${host}${path}`;
     if (event.queryStringParameters) {
       const qs = new URLSearchParams(event.queryStringParameters).toString();

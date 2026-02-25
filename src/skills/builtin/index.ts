@@ -76,4 +76,7 @@ export function registerBuiltinSkills(): void {
       registry.register(name, factory);
     }
   }
+
+  // Lock all built-in skills to prevent override
+  registry.lock();
 }

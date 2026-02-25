@@ -15,6 +15,7 @@ import type {
   ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
+import { MAX_SKILL_INPUT_LENGTH } from '../../SecurityUtils.js';
 
 /** A single search result item from the Google Custom Search API. */
 interface GoogleSearchItem {
@@ -155,12 +156,16 @@ export class WebSearchSkill extends SkillBase {
             );
           }
 
+          if (query.length > MAX_SKILL_INPUT_LENGTH) {
+            return new SwaigFunctionResult('Search query is too long.');
+          }
+
           const apiKey = process.env['GOOGLE_SEARCH_API_KEY'];
           const cx = process.env['GOOGLE_SEARCH_CX'];
 
           if (!apiKey || !cx) {
             return new SwaigFunctionResult(
-              'Web search is not configured. The GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX environment variables are required.',
+              'Service is not configured. Please contact your administrator.',
             );
           }
 

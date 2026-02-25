@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { DataMap, createSimpleApiTool, createExpressionTool } from '../src/DataMap.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { DataMap, createSimpleApiTool, createExpressionTool, setAllowedEnvPrefixes } from '../src/DataMap.js';
 import { SwaigFunctionResult } from '../src/SwaigFunctionResult.js';
 
 describe('DataMap', () => {
@@ -222,28 +222,28 @@ describe('DataMap - registerWithAgent', () => {
 
 describe('DataMap - ENV expansion', () => {
   it('expands ${ENV.*} variables in webhook URLs', () => {
-    const saved = process.env['TEST_API_KEY'];
-    process.env['TEST_API_KEY'] = 'secret123';
+    const saved = process.env['SWML_TEST_API_KEY'];
+    process.env['SWML_TEST_API_KEY'] = 'secret123';
     try {
       const dm = new DataMap('fn')
         .enableEnvExpansion()
         .purpose('Test')
-        .webhook('GET', 'https://api.example.com?key=${ENV.TEST_API_KEY}')
+        .webhook('GET', 'https://api.example.com?key=${ENV.SWML_TEST_API_KEY}')
         .output(new SwaigFunctionResult('ok'));
       const fn = dm.toSwaigFunction();
       const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
       expect(webhooks[0]['url']).toBe('https://api.example.com?key=secret123');
     } finally {
-      if (saved) process.env['TEST_API_KEY'] = saved;
-      else delete process.env['TEST_API_KEY'];
+      if (saved) process.env['SWML_TEST_API_KEY'] = saved;
+      else delete process.env['SWML_TEST_API_KEY'];
     }
   });
 
   it('missing ENV vars expand to empty string', () => {
-    delete process.env['NONEXISTENT_VAR_12345'];
+    delete process.env['SWML_NONEXISTENT_VAR_12345'];
     const dm = new DataMap('fn')
       .enableEnvExpansion()
-      .webhook('GET', 'https://api.example.com?key=${ENV.NONEXISTENT_VAR_12345}')
+      .webhook('GET', 'https://api.example.com?key=${ENV.SWML_NONEXISTENT_VAR_12345}')
       .output(new SwaigFunctionResult('ok'));
     const fn = dm.toSwaigFunction();
     const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
@@ -265,22 +265,103 @@ describe('DataMap - ENV expansion', () => {
   });
 
   it('expands ENV vars in descriptions and outputs', () => {
-    process.env['TEST_SERVICE_NAME'] = 'MyService';
+    process.env['SWML_SERVICE_NAME'] = 'MyService';
     try {
       const dm = new DataMap('fn')
         .enableEnvExpansion()
-        .purpose('Call ${ENV.TEST_SERVICE_NAME} API')
+        .purpose('Call ${ENV.SWML_SERVICE_NAME} API')
         .webhook('GET', 'https://example.com')
         .output(new SwaigFunctionResult('ok'));
       const fn = dm.toSwaigFunction();
       expect(fn['description']).toBe('Call MyService API');
     } finally {
-      delete process.env['TEST_SERVICE_NAME'];
+      delete process.env['SWML_SERVICE_NAME'];
     }
   });
 
   it('enableEnvExpansion returns this for chaining', () => {
     const dm = new DataMap('fn');
     expect(dm.enableEnvExpansion()).toBe(dm);
+  });
+});
+
+describe('DataMap - ENV prefix whitelist', () => {
+  afterEach(() => {
+    // Reset to defaults
+    setAllowedEnvPrefixes(['SIGNALWIRE_', 'SWML_', 'SW_']);
+    delete process.env['SIGNALWIRE_TEST_VAR'];
+    delete process.env['SWML_TEST_VAR'];
+    delete process.env['DATABASE_URL'];
+    delete process.env['SECRET_KEY'];
+  });
+
+  it('SIGNALWIRE_ prefix expanded by default', () => {
+    process.env['SIGNALWIRE_TEST_VAR'] = 'sw_value';
+    const dm = new DataMap('fn')
+      .enableEnvExpansion()
+      .webhook('GET', 'https://example.com?key=${ENV.SIGNALWIRE_TEST_VAR}')
+      .output(new SwaigFunctionResult('ok'));
+    const fn = dm.toSwaigFunction();
+    const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+    expect(webhooks[0]['url']).toBe('https://example.com?key=sw_value');
+  });
+
+  it('SWML_ prefix expanded by default', () => {
+    process.env['SWML_TEST_VAR'] = 'swml_value';
+    const dm = new DataMap('fn')
+      .enableEnvExpansion()
+      .webhook('GET', 'https://example.com?key=${ENV.SWML_TEST_VAR}')
+      .output(new SwaigFunctionResult('ok'));
+    const fn = dm.toSwaigFunction();
+    const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+    expect(webhooks[0]['url']).toBe('https://example.com?key=swml_value');
+  });
+
+  it('DATABASE_URL not expanded by default', () => {
+    process.env['DATABASE_URL'] = 'postgres://secret@host/db';
+    const dm = new DataMap('fn')
+      .enableEnvExpansion()
+      .webhook('GET', 'https://example.com?db=${ENV.DATABASE_URL}')
+      .output(new SwaigFunctionResult('ok'));
+    const fn = dm.toSwaigFunction();
+    const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+    expect(webhooks[0]['url']).toBe('https://example.com?db=');
+  });
+
+  it('setAllowedEnvPrefixes overrides defaults', () => {
+    setAllowedEnvPrefixes(['DATABASE_']);
+    process.env['DATABASE_URL'] = 'postgres://host/db';
+    process.env['SIGNALWIRE_TEST_VAR'] = 'should_not_expand';
+    const dm = new DataMap('fn')
+      .enableEnvExpansion()
+      .webhook('GET', 'https://example.com?db=${ENV.DATABASE_URL}&sw=${ENV.SIGNALWIRE_TEST_VAR}')
+      .output(new SwaigFunctionResult('ok'));
+    const fn = dm.toSwaigFunction();
+    const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+    expect(webhooks[0]['url']).toBe('https://example.com?db=postgres://host/db&sw=');
+  });
+
+  it('empty prefix list allows all vars', () => {
+    setAllowedEnvPrefixes([]);
+    process.env['SECRET_KEY'] = 'mysecret';
+    const dm = new DataMap('fn')
+      .enableEnvExpansion()
+      .webhook('GET', 'https://example.com?key=${ENV.SECRET_KEY}')
+      .output(new SwaigFunctionResult('ok'));
+    const fn = dm.toSwaigFunction();
+    const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+    expect(webhooks[0]['url']).toBe('https://example.com?key=mysecret');
+  });
+
+  it('per-instance setAllowedEnvPrefixes overrides global', () => {
+    process.env['DATABASE_URL'] = 'postgres://host/db';
+    const dm = new DataMap('fn')
+      .enableEnvExpansion()
+      .setAllowedEnvPrefixes(['DATABASE_'])
+      .webhook('GET', 'https://example.com?db=${ENV.DATABASE_URL}')
+      .output(new SwaigFunctionResult('ok'));
+    const fn = dm.toSwaigFunction();
+    const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+    expect(webhooks[0]['url']).toBe('https://example.com?db=postgres://host/db');
   });
 });

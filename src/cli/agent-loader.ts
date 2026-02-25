@@ -8,8 +8,11 @@
  * 4. Any exported AgentBase subclass (instantiated)
  */
 
-import { resolve } from 'node:path';
+import { resolve, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+/** Allowed file extensions for agent loading. */
+const ALLOWED_EXTENSIONS = new Set(['.ts', '.js', '.mjs', '.mts']);
 
 function isAgentInstance(obj: unknown): boolean {
   if (!obj || typeof obj !== 'object') return false;
@@ -43,8 +46,21 @@ function isSWMLServiceInstance(obj: unknown): boolean {
   );
 }
 
+/**
+ * Import a module by path after validating the file extension.
+ *
+ * **Security note:** Only `.ts`, `.js`, `.mjs`, and `.mts` extensions are allowed
+ * to prevent loading unexpected file types via dynamic import.
+ */
 async function importModule(agentPath: string): Promise<Record<string, unknown>> {
   const absPath = resolve(agentPath);
+  const ext = extname(absPath).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    throw new Error(
+      `Unsupported file extension '${ext}' for agent file: ${absPath}. ` +
+      `Only ${[...ALLOWED_EXTENSIONS].join(', ')} files are allowed.`,
+    );
+  }
   const fileUrl = pathToFileURL(absPath).href;
 
   // Suppress server startup: agent files call .run() at module scope,

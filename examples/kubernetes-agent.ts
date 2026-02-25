@@ -14,7 +14,10 @@ AgentBase.setupGracefulShutdown({ timeout: 10000 });
 export const agent = new AgentBase({
   name: 'k8s-agent',
   route: '/',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 agent.setPromptText(

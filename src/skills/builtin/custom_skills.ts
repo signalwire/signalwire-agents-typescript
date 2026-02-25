@@ -19,6 +19,9 @@ import type {
   ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
+import { getLogger } from '../../Logger.js';
+
+const log = getLogger('CustomSkillsSkill');
 
 /** Parameter definition for a custom tool. */
 interface CustomToolParameter {
@@ -69,6 +72,10 @@ interface CustomSkillsConfigData {
  * arbitrary tools via config without writing skill classes. Each tool definition
  * specifies a name, description, parameters, and a JavaScript handler function
  * body that is compiled via the Function constructor at instantiation time.
+ *
+ * **Security warning:** This skill uses `new Function()` to compile user-provided
+ * code at runtime. It is gated behind the `SWML_ALLOW_CUSTOM_HANDLER_CODE=true`
+ * environment variable to prevent unintended code execution.
  */
 export class CustomSkillsSkill extends SkillBase {
   private _compiledHandlers: Map<string, Function> = new Map();
@@ -165,9 +172,19 @@ export class CustomSkillsSkill extends SkillBase {
    */
   private _compileHandlers(): void {
     const toolDefs = this._getToolDefs();
+    const codeAllowed = process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'] === 'true';
 
     for (const toolDef of toolDefs) {
+      if (!codeAllowed) {
+        this._compilationErrors.set(
+          toolDef.name,
+          'Custom handler code is disabled. Set SWML_ALLOW_CUSTOM_HANDLER_CODE=true to enable.',
+        );
+        continue;
+      }
+
       try {
+        log.warn(`Compiling custom handler code for tool '${toolDef.name}'`);
         // The handler code receives: args, rawData, SwaigFunctionResult
         // It should return a SwaigFunctionResult, string, or plain object
         const handler = new Function(

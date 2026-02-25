@@ -9,19 +9,48 @@ import { SwaigFunctionResult } from './SwaigFunctionResult.js';
 
 const ENV_PATTERN = /\$\{ENV\.([^}]+)\}/g;
 
-function expandEnvVars(value: string): string {
+/** Default allowed env var prefixes for expansion. */
+let globalAllowedEnvPrefixes: string[] = ['SIGNALWIRE_', 'SWML_', 'SW_'];
+
+/**
+ * Set the global allowed env var prefixes for `${ENV.*}` expansion.
+ *
+ * Only environment variables whose names start with one of these prefixes
+ * will be expanded. An empty array allows all variables (escape hatch).
+ *
+ * @param prefixes - Array of prefix strings to allow.
+ */
+export function setAllowedEnvPrefixes(prefixes: string[]): void {
+  globalAllowedEnvPrefixes = prefixes;
+}
+
+/**
+ * Get the current global allowed env var prefixes.
+ * @returns A copy of the current prefix list.
+ */
+export function getAllowedEnvPrefixes(): string[] {
+  return [...globalAllowedEnvPrefixes];
+}
+
+function isEnvVarAllowed(varName: string, allowedPrefixes: string[]): boolean {
+  if (allowedPrefixes.length === 0) return true;
+  return allowedPrefixes.some((prefix) => varName.startsWith(prefix));
+}
+
+function expandEnvVars(value: string, allowedPrefixes: string[]): string {
   return value.replace(ENV_PATTERN, (_match, varName: string) => {
+    if (!isEnvVarAllowed(varName, allowedPrefixes)) return '';
     return process.env[varName] ?? '';
   });
 }
 
-function expandEnvInObject(obj: unknown): unknown {
-  if (typeof obj === 'string') return expandEnvVars(obj);
-  if (Array.isArray(obj)) return obj.map(expandEnvInObject);
+function expandEnvInObject(obj: unknown, allowedPrefixes: string[]): unknown {
+  if (typeof obj === 'string') return expandEnvVars(obj, allowedPrefixes);
+  if (Array.isArray(obj)) return obj.map((item) => expandEnvInObject(item, allowedPrefixes));
   if (obj && typeof obj === 'object') {
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-      result[k] = expandEnvInObject(v);
+      result[k] = expandEnvInObject(v, allowedPrefixes);
     }
     return result;
   }
@@ -44,6 +73,7 @@ export class DataMap {
   private _output: Record<string, unknown> | null = null;
   private _errorKeys: string[] = [];
   private _expandEnv = false;
+  private _allowedEnvPrefixes: string[] | null = null;
 
   /**
    * @param functionName - The unique name for this data map tool.
@@ -59,6 +89,20 @@ export class DataMap {
    */
   enableEnvExpansion(enabled = true): this {
     this._expandEnv = enabled;
+    return this;
+  }
+
+  /**
+   * Set the allowed env var prefixes for this DataMap instance.
+   *
+   * Overrides the global defaults. Only env vars whose names start with
+   * one of these prefixes will be expanded. An empty array allows all.
+   *
+   * @param prefixes - Array of prefix strings to allow.
+   * @returns This instance for chaining.
+   */
+  setAllowedEnvPrefixes(prefixes: string[]): this {
+    this._allowedEnvPrefixes = prefixes;
     return this;
   }
 
@@ -301,7 +345,8 @@ export class DataMap {
     };
 
     if (this._expandEnv) {
-      result = expandEnvInObject(result) as Record<string, unknown>;
+      const prefixes = this._allowedEnvPrefixes ?? globalAllowedEnvPrefixes;
+      result = expandEnvInObject(result, prefixes) as Record<string, unknown>;
     }
 
     return result;

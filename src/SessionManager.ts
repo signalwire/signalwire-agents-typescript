@@ -14,6 +14,7 @@ export class SessionManager {
   tokenExpirySecs: number;
   private secretKey: string;
   private sessionMetadata: Map<string, Record<string, unknown>> = new Map();
+  private sessionTimestamps: Map<string, number> = new Map();
   private log = getLogger('SessionManager');
 
   /**
@@ -44,15 +45,14 @@ export class SessionManager {
    */
   generateToken(functionName: string, callId: string): string {
     const expiry = Math.floor(Date.now() / 1000) + this.tokenExpirySecs;
-    const nonce = randomBytes(4).toString('hex');
+    const nonce = randomBytes(16).toString('hex');
     const message = `${callId}:${functionName}:${expiry}:${nonce}`;
     const signature = createHmac('sha256', this.secretKey)
       .update(message)
-      .digest('hex')
-      .slice(0, 16);
+      .digest('hex');
     const token = `${callId}.${functionName}.${expiry}.${nonce}.${signature}`;
     const encoded = Buffer.from(token).toString('base64url');
-    this.log.debug('created_token', { function: functionName, call_id: callId, token_prefix: encoded.slice(0, 20) });
+    this.log.debug('created_token', { function: functionName, call_id: callId });
     return encoded;
   }
 
@@ -90,7 +90,7 @@ export class SessionManager {
       }
 
       const expiry = parseInt(tokenExpiry, 10);
-      if (expiry < Date.now() / 1000) {
+      if (expiry <= Math.floor(Date.now() / 1000)) {
         this.log.warn('token_expired', { function: functionName });
         return false;
       }
@@ -98,8 +98,7 @@ export class SessionManager {
       const message = `${tokenCallId}:${tokenFunction}:${tokenExpiry}:${tokenNonce}`;
       const expectedSig = createHmac('sha256', this.secretKey)
         .update(message)
-        .digest('hex')
-        .slice(0, 16);
+        .digest('hex');
       if (tokenSignature !== expectedSig) {
         this.log.warn('token_invalid', { function: functionName });
         return false;
@@ -169,6 +168,26 @@ export class SessionManager {
    */
   setSessionMetadata(sessionId: string, metadata: Record<string, unknown>): void {
     this.sessionMetadata.set(sessionId, { ...this.sessionMetadata.get(sessionId), ...metadata });
+    this.sessionTimestamps.set(sessionId, Date.now());
+    // Auto-cleanup when map grows too large
+    if (this.sessionMetadata.size > 1000) {
+      this.cleanup();
+    }
+  }
+
+  /**
+   * Remove session metadata entries older than `maxAgeMs`.
+   * @param maxAgeMs - Maximum age in milliseconds (defaults to `tokenExpirySecs * 1000`).
+   */
+  cleanup(maxAgeMs?: number): void {
+    const maxAge = maxAgeMs ?? this.tokenExpirySecs * 1000;
+    const cutoff = Date.now() - maxAge;
+    for (const [id, ts] of this.sessionTimestamps) {
+      if (ts <= cutoff) {
+        this.sessionMetadata.delete(id);
+        this.sessionTimestamps.delete(id);
+      }
+    }
   }
 
   /**

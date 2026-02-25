@@ -11,7 +11,10 @@ import { AgentBase, SwaigFunctionResult } from '../src/index.js';
 export const agent = new AgentBase({
   name: 'recording-agent',
   route: '/',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
   recordCall: true,
   recordFormat: 'mp4',
   recordStereo: true,

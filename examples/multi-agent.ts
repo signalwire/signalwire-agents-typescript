@@ -16,7 +16,10 @@ import { AgentBase, AgentServer, SwaigFunctionResult } from '../src/index.js';
 export const support = new AgentBase({
   name: 'support',
   route: '/support',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 support.setPromptText('You are a customer support agent. Help resolve issues quickly and politely.');
@@ -37,7 +40,10 @@ support.defineTool({
 export const sales = new AgentBase({
   name: 'sales',
   route: '/sales',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 sales.setPromptText('You are a sales agent. Help potential customers understand our products and pricing.');

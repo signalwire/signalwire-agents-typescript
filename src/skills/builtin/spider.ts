@@ -15,6 +15,7 @@ import type {
   ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
+import { resolveAndValidateUrl, MAX_SKILL_INPUT_LENGTH } from '../../SecurityUtils.js';
 
 /** A single crawl result from the Spider API. */
 interface SpiderResult {
@@ -118,6 +119,10 @@ export class SpiderSkill extends SkillBase {
             return new SwaigFunctionResult('Please provide a URL to scrape.');
           }
 
+          if (url.length > MAX_SKILL_INPUT_LENGTH) {
+            return new SwaigFunctionResult('Input URL is too long.');
+          }
+
           const trimmedUrl = url.trim();
           if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
             return new SwaigFunctionResult(
@@ -125,10 +130,20 @@ export class SpiderSkill extends SkillBase {
             );
           }
 
+          // SSRF protection: validate URL does not resolve to a private IP
+          const allowPrivate = process.env['SWML_ALLOW_PRIVATE_URLS'] === 'true';
+          try {
+            await resolveAndValidateUrl(trimmedUrl, allowPrivate);
+          } catch (err) {
+            return new SwaigFunctionResult(
+              `URL validation failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+
           const apiKey = process.env['SPIDER_API_KEY'];
           if (!apiKey) {
             return new SwaigFunctionResult(
-              'Spider scraping is not configured. The SPIDER_API_KEY environment variable is required.',
+              'Service is not configured. Please contact your administrator.',
             );
           }
 

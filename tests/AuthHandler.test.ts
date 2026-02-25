@@ -99,6 +99,18 @@ describe('AuthHandler', () => {
     expect(await auth.validate({ 'x-token': 'nope' })).toBe(false);
   });
 
+  it('allowUnauthenticated: false with no methods denies request', async () => {
+    const auth = new AuthHandler({ allowUnauthenticated: false });
+    const valid = await auth.validate({});
+    expect(valid).toBe(false);
+  });
+
+  it('different-length strings are safely rejected', async () => {
+    const auth = new AuthHandler({ bearerToken: 'short' });
+    const valid = await auth.validate({ authorization: 'Bearer a-much-longer-token-value' });
+    expect(valid).toBe(false);
+  });
+
   it('middleware returns 401 for unauthorized request', async () => {
     const auth = new AuthHandler({ bearerToken: 'secret' });
     const mw = auth.middleware();

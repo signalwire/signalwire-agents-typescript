@@ -11,7 +11,10 @@ import { SWMLService, SwmlBuilder } from '../src/index.js';
 export const agent = new SWMLService({
   name: 'ivr-menu',
   route: '/',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 // Build a simple IVR: answer → play greeting → record voicemail → hangup

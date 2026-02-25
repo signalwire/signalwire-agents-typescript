@@ -64,7 +64,10 @@ class OrderAgent extends AgentBase {
 export const agent = new OrderAgent({
   name: 'order-agent',
   route: '/',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 // Global data available to the AI throughout the call

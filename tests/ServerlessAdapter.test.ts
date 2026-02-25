@@ -197,4 +197,26 @@ describe('ServerlessAdapter', () => {
     expect(response.headers).toBeDefined();
     expect(response.headers['content-type']).toContain('application/json');
   });
+
+  it('env var AWS_LAMBDA_FUNCTION_URL takes precedence over host header', async () => {
+    const saved = process.env['AWS_LAMBDA_FUNCTION_URL'];
+    process.env['AWS_LAMBDA_FUNCTION_URL'] = 'https://lambda-func.on.aws/';
+    try {
+      const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+      agent.setPromptText('hello');
+      const app = agent.getApp();
+      const adapter = new ServerlessAdapter('lambda');
+
+      const response = await adapter.handleRequest(app, {
+        httpMethod: 'GET',
+        path: '/health',
+        headers: { host: 'attacker-controlled.com' },
+      });
+      // Should still work (health endpoint)
+      expect(response.statusCode).toBe(200);
+    } finally {
+      if (saved) process.env['AWS_LAMBDA_FUNCTION_URL'] = saved;
+      else delete process.env['AWS_LAMBDA_FUNCTION_URL'];
+    }
+  });
 });

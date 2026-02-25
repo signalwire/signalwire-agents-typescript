@@ -11,7 +11,10 @@ import { SWMLService, SwmlBuilder } from '../src/index.js';
 export const agent = new SWMLService({
   name: 'dynamic-ivr',
   route: '/',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 agent.setOnRequestCallback((queryParams, _bodyParams, _headers) => {

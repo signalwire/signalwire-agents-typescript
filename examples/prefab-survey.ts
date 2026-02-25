@@ -54,7 +54,10 @@ export const agent = new SurveyAgent({
   },
   agentOptions: {
     route: '/',
-    basicAuth: ['user', 'pass'],
+    basicAuth: [
+      process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+      process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+    ],
   },
 });
 

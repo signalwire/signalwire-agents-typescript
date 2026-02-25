@@ -232,7 +232,6 @@ describe('WeatherApiSkill', () => {
     const handler = skill.getTools()[0].handler;
     const result = await handler({ location: 'London' }, {}) as SwaigFunctionResult;
     expect(result).toBeInstanceOf(SwaigFunctionResult);
-    expect(result.response).toContain('WEATHER_API_KEY');
     expect(result.response).toContain('not configured');
     if (originalKey !== undefined) process.env['WEATHER_API_KEY'] = originalKey;
   });
@@ -514,20 +513,27 @@ describe('CustomSkillsSkill', () => {
   });
 
   it('should execute custom tool handler', async () => {
-    const skill = createCustomSkillsSkill({
-      tools: [
-        {
-          name: 'greet',
-          description: 'Greet a user',
-          handler_code: 'return new SwaigFunctionResult("Hello, " + args.name + "!");',
-          parameters: [{ name: 'name', type: 'string', description: 'Name to greet' }],
-        },
-      ],
-    });
-    const handler = skill.getTools()[0].handler;
-    const result = await handler({ name: 'World' }, {}) as SwaigFunctionResult;
-    expect(result).toBeInstanceOf(SwaigFunctionResult);
-    expect(result.response).toBe('Hello, World!');
+    const saved = process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'];
+    process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'] = 'true';
+    try {
+      const skill = createCustomSkillsSkill({
+        tools: [
+          {
+            name: 'greet',
+            description: 'Greet a user',
+            handler_code: 'return new SwaigFunctionResult("Hello, " + args.name + "!");',
+            parameters: [{ name: 'name', type: 'string', description: 'Name to greet' }],
+          },
+        ],
+      });
+      const handler = skill.getTools()[0].handler;
+      const result = await handler({ name: 'World' }, {}) as SwaigFunctionResult;
+      expect(result).toBeInstanceOf(SwaigFunctionResult);
+      expect(result.response).toBe('Hello, World!');
+    } finally {
+      if (saved) process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'] = saved;
+      else delete process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'];
+    }
   });
 });
 
@@ -574,7 +580,6 @@ describe('WebSearchSkill', () => {
     const handler = skill.getTools()[0].handler;
     const result = await handler({ query: 'test' }, {}) as SwaigFunctionResult;
     expect(result).toBeInstanceOf(SwaigFunctionResult);
-    expect(result.response).toContain('GOOGLE_SEARCH_API_KEY');
     expect(result.response).toContain('not configured');
     if (origKey !== undefined) process.env['GOOGLE_SEARCH_API_KEY'] = origKey;
     if (origCx !== undefined) process.env['GOOGLE_SEARCH_CX'] = origCx;
@@ -659,7 +664,6 @@ describe('GoogleMapsSkill', () => {
       {},
     ) as SwaigFunctionResult;
     expect(result).toBeInstanceOf(SwaigFunctionResult);
-    expect(result.response).toContain('GOOGLE_MAPS_API_KEY');
     expect(result.response).toContain('not configured');
     if (origKey !== undefined) process.env['GOOGLE_MAPS_API_KEY'] = origKey;
   });
@@ -674,7 +678,7 @@ describe('GoogleMapsSkill', () => {
       {},
     ) as SwaigFunctionResult;
     expect(result).toBeInstanceOf(SwaigFunctionResult);
-    expect(result.response).toContain('GOOGLE_MAPS_API_KEY');
+    expect(result.response).toContain('not configured');
     if (origKey !== undefined) process.env['GOOGLE_MAPS_API_KEY'] = origKey;
   });
 });
@@ -864,7 +868,6 @@ describe('SpiderSkill', () => {
     const handler = skill.getTools()[0].handler;
     const result = await handler({ url: 'https://example.com' }, {}) as SwaigFunctionResult;
     expect(result).toBeInstanceOf(SwaigFunctionResult);
-    expect(result.response).toContain('SPIDER_API_KEY');
     expect(result.response).toContain('not configured');
     if (origKey !== undefined) process.env['SPIDER_API_KEY'] = origKey;
   });
@@ -920,5 +923,56 @@ describe('McpGatewaySkill', () => {
     const result = handler({ server: 'test', method: 'test' }, {}) as SwaigFunctionResult;
     expect(result).toBeInstanceOf(SwaigFunctionResult);
     expect(result.response).toContain('not yet implemented');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Security remediation tests
+// ---------------------------------------------------------------------------
+describe('CustomSkillsSkill - code gate', () => {
+  it('should block handler compilation when SWML_ALLOW_CUSTOM_HANDLER_CODE is not set', () => {
+    const saved = process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'];
+    delete process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'];
+    const skill = createCustomSkillsSkill({
+      tools: [{ name: 'test_tool', description: 'Test', handler_code: 'return "hello";' }],
+    });
+    const errors = skill.getCompilationErrors();
+    expect(errors.has('test_tool')).toBe(true);
+    expect(errors.get('test_tool')).toContain('disabled');
+    if (saved) process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'] = saved;
+  });
+
+  it('should allow handler compilation when SWML_ALLOW_CUSTOM_HANDLER_CODE=true', () => {
+    const saved = process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'];
+    process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'] = 'true';
+    const skill = createCustomSkillsSkill({
+      tools: [{ name: 'test_tool', description: 'Test', handler_code: 'return "hello";' }],
+    });
+    const errors = skill.getCompilationErrors();
+    expect(errors.has('test_tool')).toBe(false);
+    if (saved) process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'] = saved;
+    else delete process.env['SWML_ALLOW_CUSTOM_HANDLER_CODE'];
+  });
+});
+
+describe('SpiderSkill - SSRF protection', () => {
+  it('should reject URLs resolving to private IPs', async () => {
+    const saved = process.env['SWML_ALLOW_PRIVATE_URLS'];
+    delete process.env['SWML_ALLOW_PRIVATE_URLS'];
+    const skill = createSpiderSkill();
+    const handler = skill.getTools()[0].handler;
+    const result = await handler({ url: 'http://127.0.0.1/secret' }, {}) as SwaigFunctionResult;
+    expect(result).toBeInstanceOf(SwaigFunctionResult);
+    expect(result.response).toContain('private IP');
+    if (saved) process.env['SWML_ALLOW_PRIVATE_URLS'] = saved;
+  });
+
+  it('should reject overly long input', async () => {
+    const skill = createSpiderSkill();
+    const handler = skill.getTools()[0].handler;
+    const longUrl = 'https://example.com/' + 'a'.repeat(2000);
+    const result = await handler({ url: longUrl }, {}) as SwaigFunctionResult;
+    expect(result).toBeInstanceOf(SwaigFunctionResult);
+    expect(result.response).toContain('too long');
   });
 });

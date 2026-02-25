@@ -690,4 +690,106 @@ describe('AgentBase', () => {
     const agent = createAgent();
     expect(agent.hasSkill('nope')).toBe(false);
   });
+
+  // ── Security remediation tests ─────────────────────────────────────
+
+  it('setParams with __proto__ key does NOT pollute Object prototype', () => {
+    const agent = createAgent();
+    agent.setParams({ __proto__: { polluted: true }, temperature: 0.7 });
+    expect(({} as any).polluted).toBeUndefined();
+    // Normal key should still work
+    const swml = JSON.parse(agent.renderSwml());
+    // params are in AI config
+    const ai = swml.sections.main.find((v: any) => v.ai)?.ai;
+    expect(ai?.params?.temperature).toBe(0.7);
+  });
+
+  it('CORS wildcard sets credentials: false', async () => {
+    const saved = process.env['SWML_CORS_ORIGINS'];
+    delete process.env['SWML_CORS_ORIGINS'];
+    try {
+      const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+      const app = agent.getApp();
+      const res = await app.request('/health', {
+        method: 'GET',
+        headers: { 'Origin': 'https://example.com' },
+      });
+      // When origin is *, credentials should not be included
+      const credHeader = res.headers.get('Access-Control-Allow-Credentials');
+      expect(credHeader).toBeNull();
+    } finally {
+      if (saved) process.env['SWML_CORS_ORIGINS'] = saved;
+    }
+  });
+
+  it('invalid port throws', () => {
+    expect(() => new AgentBase({ name: 'test', route: '/', port: 0 })).toThrow('Invalid port');
+    expect(() => new AgentBase({ name: 'test', route: '/', port: 99999 })).toThrow('Invalid port');
+    expect(() => new AgentBase({ name: 'test', route: '/', port: NaN })).toThrow('Invalid port');
+  });
+
+  it('NaN content-length returns 413', async () => {
+    const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+    agent.setPromptText('hello');
+    const app = agent.getApp();
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+        'Content-Length': 'not-a-number',
+      },
+      body: '{}',
+    });
+    expect(res.status).toBe(413);
+  });
+
+  it('SWAIG handler error returns friendly message without internal details', async () => {
+    const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+    agent.defineTool({
+      name: 'crash_fn',
+      description: 'Will crash',
+      parameters: {},
+      handler: () => { throw new Error('secret internal error details'); },
+    });
+    const app = agent.getApp();
+    const res = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'crash_fn', argument: {} }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // SwaigFunction.execute catches errors and returns a friendly message
+    expect(JSON.stringify(body)).not.toContain('secret internal error details');
+    expect(body.response).toContain('try again');
+  });
+
+  it('CSP and Permissions-Policy headers are present', async () => {
+    const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+    agent.setPromptText('hello');
+    const app = agent.getApp();
+    const res = await app.request('/health');
+    expect(res.headers.get('Content-Security-Policy')).toContain("default-src 'none'");
+    expect(res.headers.get('Permissions-Policy')).toContain('camera=()');
+  });
+
+  it('auto-generated password is 32 hex chars', () => {
+    const savedUser = process.env['SWML_BASIC_AUTH_USER'];
+    const savedPass = process.env['SWML_BASIC_AUTH_PASSWORD'];
+    delete process.env['SWML_BASIC_AUTH_USER'];
+    delete process.env['SWML_BASIC_AUTH_PASSWORD'];
+    try {
+      const agent = new AgentBase({ name: 'test-auto-pass', route: '/' });
+      const [, pass] = agent.getBasicAuthCredentials();
+      expect(pass.length).toBe(32);
+      expect(/^[0-9a-f]{32}$/.test(pass)).toBe(true);
+    } finally {
+      if (savedUser) process.env['SWML_BASIC_AUTH_USER'] = savedUser;
+      if (savedPass) process.env['SWML_BASIC_AUTH_PASSWORD'] = savedPass;
+    }
+  });
 });

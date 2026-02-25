@@ -11,7 +11,10 @@ import { AgentBase, DateTimeSkill, MathSkill } from '../src/index.js';
 export const agent = new AgentBase({
   name: 'skilled-agent',
   route: '/',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 agent.setPromptText(

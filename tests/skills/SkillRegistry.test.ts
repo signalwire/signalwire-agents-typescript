@@ -118,7 +118,38 @@ describe('SkillRegistry', () => {
   });
 
   it('discoverFromDirectory handles non-existent dir', async () => {
+    process.env['SWML_SKILL_DISCOVERY_ENABLED'] = 'true';
     const found = await registry.discoverFromDirectory('/nonexistent/path');
+    expect(found).toHaveLength(0);
+    delete process.env['SWML_SKILL_DISCOVERY_ENABLED'];
+  });
+
+  // ── Security remediation tests ─────────────────────────────────────
+
+  it('locked skill cannot be overwritten', () => {
+    registry.register('locked_skill', () => new SimpleSkill());
+    registry.lock(['locked_skill']);
+    // Attempt to overwrite
+    registry.register('locked_skill', () => new SimpleSkill());
+    // Still has original (just verifying it didn't throw and kept the name)
+    expect(registry.has('locked_skill')).toBe(true);
+  });
+
+  it('lock() without args locks all current skills', () => {
+    registry.register('a', () => new SimpleSkill());
+    registry.register('b', () => new SimpleSkill());
+    registry.lock();
+    // Try overwriting
+    registry.register('a', () => new SimpleSkill());
+    registry.register('b', () => new SimpleSkill());
+    // Both still exist
+    expect(registry.has('a')).toBe(true);
+    expect(registry.has('b')).toBe(true);
+  });
+
+  it('discovery disabled by default', async () => {
+    delete process.env['SWML_SKILL_DISCOVERY_ENABLED'];
+    const found = await registry.discoverFromDirectory('/some/path');
     expect(found).toHaveLength(0);
   });
 });

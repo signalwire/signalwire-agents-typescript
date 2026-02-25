@@ -51,6 +51,7 @@ let _instance: SkillRegistry | null = null;
  */
 export class SkillRegistry {
   private registry: Map<string, RegistryEntry> = new Map();
+  private lockedNames: Set<string> = new Set();
   private searchPaths: string[];
 
   constructor() {
@@ -83,11 +84,27 @@ export class SkillRegistry {
    * @param manifest - Optional manifest metadata for the skill.
    */
   register(name: string, factory: SkillFactory, manifest?: SkillManifest): void {
+    if (this.lockedNames.has(name)) {
+      log.warn(`Cannot overwrite locked skill: ${name}`);
+      return;
+    }
     if (this.registry.has(name)) {
       log.warn(`Overwriting skill registration: ${name}`);
     }
     this.registry.set(name, { name, factory, manifest });
     log.debug(`Registered skill: ${name}`);
+  }
+
+  /**
+   * Lock one or more skill names to prevent overwriting.
+   * If called with no arguments, locks all currently registered skills.
+   * @param names - Skill names to lock; if omitted, all current names are locked.
+   */
+  lock(names?: string[]): void {
+    const toLock = names ?? Array.from(this.registry.keys());
+    for (const name of toLock) {
+      this.lockedNames.add(name);
+    }
   }
 
   /**
@@ -176,6 +193,10 @@ export class SkillRegistry {
    * @returns Array of newly discovered skill names.
    */
   async discoverFromDirectory(dirPath: string): Promise<string[]> {
+    if (process.env['SWML_SKILL_DISCOVERY_ENABLED'] !== 'true') {
+      log.warn('Skill directory discovery is disabled. Set SWML_SKILL_DISCOVERY_ENABLED=true to enable.');
+      return [];
+    }
     const { readdir } = await import('node:fs/promises');
     const { join } = await import('node:path');
     const { pathToFileURL } = await import('node:url');

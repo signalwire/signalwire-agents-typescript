@@ -11,7 +11,10 @@ import { AgentBase, SwaigFunctionResult } from '../src/index.js';
 export const agent = new AgentBase({
   name: 'simple-agent',
   route: '/',
-  basicAuth: ['user', 'pass'],
+  basicAuth: [
+    process.env['SWML_BASIC_AUTH_USER'] ?? 'user',
+    process.env['SWML_BASIC_AUTH_PASSWORD'] ?? 'pass',
+  ],
 });
 
 agent.setPromptText('You are a friendly assistant named Siggy. Help callers with their questions.');

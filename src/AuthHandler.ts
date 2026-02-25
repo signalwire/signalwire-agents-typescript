@@ -5,7 +5,10 @@
  * Can be used as Hono middleware or standalone validator.
  */
 
-import { timingSafeEqual, randomBytes } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
+import { getLogger } from './Logger.js';
+
+const log = getLogger('AuthHandler');
 
 /** Configuration for one or more authentication methods checked by {@link AuthHandler}. */
 export interface AuthConfig {
@@ -17,19 +20,20 @@ export interface AuthConfig {
   basicAuth?: [string, string];
   /** Custom validator function; return true to allow the request. */
   customValidator?: (request: { headers: Record<string, string>; method: string; url: string }) => boolean | Promise<boolean>;
+  /** When explicitly set to false, deny requests if no auth methods are configured. */
+  allowUnauthenticated?: boolean;
 }
 
 /**
  * Constant-time string comparison to prevent timing attacks.
  */
 function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    // Compare against a dummy to prevent length-based timing leaks
-    const dummy = randomBytes(a.length).toString('hex');
-    timingSafeEqual(Buffer.from(dummy), Buffer.from(dummy));
-    return false;
-  }
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const maxLen = Math.max(a.length, b.length);
+  const result = timingSafeEqual(
+    Buffer.from(a.padEnd(maxLen, '\0')),
+    Buffer.from(b.padEnd(maxLen, '\0')),
+  );
+  return result && a.length === b.length;
 }
 
 /** Multi-method authentication handler with timing-safe credential comparison. */
@@ -90,8 +94,12 @@ export class AuthHandler {
       if (result) return true;
     }
 
-    // If no methods configured, allow (backwards compat)
+    // If no methods configured, check allowUnauthenticated flag
     if (!this.config.bearerToken && !this.config.apiKey && !this.config.basicAuth && !this.config.customValidator) {
+      if (this.config.allowUnauthenticated === false) {
+        return false;
+      }
+      log.warn('No auth methods configured; allowing unauthenticated access. Set allowUnauthenticated to false to deny.');
       return true;
     }
 

@@ -15,6 +15,7 @@ import type {
   ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
+import { MAX_SKILL_INPUT_LENGTH } from '../../SecurityUtils.js';
 
 /** A single leg of a route from the Google Directions API. */
 interface DirectionsLeg {
@@ -158,10 +159,14 @@ export class GoogleMapsSkill extends SkillBase {
             return new SwaigFunctionResult('Please provide a destination.');
           }
 
+          if (origin.length > MAX_SKILL_INPUT_LENGTH || destination.length > MAX_SKILL_INPUT_LENGTH) {
+            return new SwaigFunctionResult('Input is too long.');
+          }
+
           const apiKey = process.env['GOOGLE_MAPS_API_KEY'];
           if (!apiKey) {
             return new SwaigFunctionResult(
-              'Google Maps is not configured. The GOOGLE_MAPS_API_KEY environment variable is required.',
+              'Service is not configured. Please contact your administrator.',
             );
           }
 
@@ -256,10 +261,14 @@ export class GoogleMapsSkill extends SkillBase {
             return new SwaigFunctionResult('Please provide a place to search for.');
           }
 
+          if (query.length > MAX_SKILL_INPUT_LENGTH) {
+            return new SwaigFunctionResult('Search query is too long.');
+          }
+
           const apiKey = process.env['GOOGLE_MAPS_API_KEY'];
           if (!apiKey) {
             return new SwaigFunctionResult(
-              'Google Maps is not configured. The GOOGLE_MAPS_API_KEY environment variable is required.',
+              'Service is not configured. Please contact your administrator.',
             );
           }
 

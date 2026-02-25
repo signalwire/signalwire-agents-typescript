@@ -136,4 +136,41 @@ describe('SessionManager', () => {
     expect(sm.deleteSessionMetadata('session-1')).toBe(true);
     expect(sm.getSessionMetadata('session-1')).toBeUndefined();
   });
+
+  // ── Security remediation tests ─────────────────────────────────────
+
+  it('token round-trip works with full-length HMAC', () => {
+    const sm = new SessionManager();
+    const token = sm.generateToken('fn_a', 'call-99');
+    const info = sm.debugToken(token);
+    expect(info).not.toBeNull();
+    // Full SHA-256 hex digest is 64 chars
+    expect(info!.signature.length).toBe(64);
+    expect(sm.validateToken('call-99', 'fn_a', token)).toBe(true);
+  });
+
+  it('cleanup() removes stale entries', () => {
+    const sm = new SessionManager(1); // 1 second expiry
+    sm.setSessionMetadata('old-session', { a: 1 });
+    // Artificially age the entry by overwriting its timestamp
+    (sm as any).sessionTimestamps.set('old-session', Date.now() - 5000);
+    sm.cleanup();
+    expect(sm.getSessionMetadata('old-session')).toBeUndefined();
+  });
+
+  it('cleanup(0) removes all entries', () => {
+    const sm = new SessionManager();
+    sm.setSessionMetadata('s1', { a: 1 });
+    sm.setSessionMetadata('s2', { b: 2 });
+    sm.cleanup(0);
+    expect(sm.getSessionMetadata('s1')).toBeUndefined();
+    expect(sm.getSessionMetadata('s2')).toBeUndefined();
+  });
+
+  it('boundary expiry token is rejected (expiry <= now)', () => {
+    const sm = new SessionManager(0); // token expires at creation time
+    const token = sm.generateToken('fn', 'call-1');
+    // With <= comparison, a token expiring at exactly now should be invalid
+    expect(sm.validateToken('call-1', 'fn', token)).toBe(false);
+  });
 });

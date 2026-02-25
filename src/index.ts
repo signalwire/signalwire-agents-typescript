@@ -20,7 +20,7 @@ export { SwaigFunction } from './SwaigFunction.js';
 export type { SwaigHandler, SwaigFunctionOptions } from './SwaigFunction.js';
 
 // DataMap (server-side tools)
-export { DataMap, createSimpleApiTool, createExpressionTool } from './DataMap.js';
+export { DataMap, createSimpleApiTool, createExpressionTool, setAllowedEnvPrefixes, getAllowedEnvPrefixes } from './DataMap.js';
 
 // Prompt Object Model
 export { PomBuilder, PomSection } from './PomBuilder.js';
@@ -57,6 +57,9 @@ export type { ValidationResult } from './SchemaUtils.js';
 // Auth
 export { AuthHandler } from './AuthHandler.js';
 export type { AuthConfig } from './AuthHandler.js';
+
+// Security utilities
+export { safeAssign, filterSensitiveHeaders, redactUrl, MAX_SKILL_INPUT_LENGTH } from './SecurityUtils.js';
 
 // Config
 export { ConfigLoader } from './ConfigLoader.js';

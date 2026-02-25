@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { AgentBase } from '../src/AgentBase.js';
 
 describe('ProxyDetection', () => {
@@ -8,6 +8,8 @@ describe('ProxyDetection', () => {
     // Clear env vars that could interfere
     delete process.env['SWML_PROXY_URL_BASE'];
     delete process.env['SWML_PROXY_DEBUG'];
+    // Enable proxy header trust for tests that rely on header-based detection
+    process.env['SWML_TRUST_PROXY_HEADERS'] = 'true';
     agent = new AgentBase({ name: 'proxy-test', route: '/', basicAuth: ['user', 'pass'] });
     agent.setPromptText('test prompt');
   });
@@ -126,6 +128,7 @@ describe('ProxyDetection', () => {
 
   it('env var SWML_PROXY_URL_BASE takes priority and is never overridden', async () => {
     process.env['SWML_PROXY_URL_BASE'] = 'https://env-proxy.example.com';
+    process.env['SWML_TRUST_PROXY_HEADERS'] = 'true';
     const envAgent = new AgentBase({ name: 'env-test', route: '/', basicAuth: ['user', 'pass'] });
     envAgent.setPromptText('test');
     const app = envAgent.getApp();
@@ -181,5 +184,45 @@ describe('ProxyDetection', () => {
       body: JSON.stringify({}),
     });
     expect(agent.getFullUrl()).toBe(beforeUrl);
+  });
+
+  it('proxy detection disabled by default when SWML_TRUST_PROXY_HEADERS is not set', async () => {
+    delete process.env['SWML_TRUST_PROXY_HEADERS'];
+    const noTrustAgent = new AgentBase({ name: 'no-trust', route: '/', basicAuth: ['user', 'pass'] });
+    noTrustAgent.setPromptText('test');
+    const beforeUrl = noTrustAgent.getFullUrl();
+    const app = noTrustAgent.getApp();
+    await app.request('http://localhost/', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('user:pass'),
+        'Content-Type': 'application/json',
+        'X-Forwarded-Host': 'should-be-ignored.com',
+        'X-Forwarded-Proto': 'https',
+      },
+      body: JSON.stringify({}),
+    });
+    expect(noTrustAgent.getFullUrl()).toBe(beforeUrl);
+  });
+
+  it('invalid hostname in Forwarded header is rejected', async () => {
+    const app = agent.getApp();
+    const beforeUrl = agent.getFullUrl();
+    // Use a hostname with a slash which will fail isValidHostname
+    await app.request('http://localhost/', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('user:pass'),
+        'Content-Type': 'application/json',
+        'Forwarded': 'host=evil/path;proto=https',
+      },
+      body: JSON.stringify({}),
+    });
+    // Should not have set proxy because hostname contains a slash
+    expect(agent.getFullUrl()).toBe(beforeUrl);
+  });
+
+  afterEach(() => {
+    delete process.env['SWML_TRUST_PROXY_HEADERS'];
   });
 });
