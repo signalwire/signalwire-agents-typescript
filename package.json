@@ -2,6 +2,7 @@
   "name": "signalwire-agents",
   "version": "0.1.0",
   "description": "SignalWire AI Agents SDK for TypeScript/Node.js",
+  "private": false,
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,19 +13,23 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "license": "MIT",
   "dependencies": {
-    "hono": "^4.4.0",
-    "@hono/node-server": "^1.11.0"
+    "@hono/node-server": "^1.11.0",
+    "hono": "^4.4.0"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
+    "@types/node": "^20.14.0",
     "typescript": "^5.5.0",
-    "vitest": "^1.6.0",
-    "@types/node": "^20.14.0"
+    "vitest": "^1.6.0"
   }
 }

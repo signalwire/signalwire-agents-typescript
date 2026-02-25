@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm test
+
+  changeset-check:
+    name: Changeset Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check for changeset
+        run: |
+          # Verify that new changesets exist (not just the README)
+          CHANGESETS=$(ls .changeset/*.md 2>/dev/null | grep -v README.md | wc -l)
+          if [ "$CHANGESETS" -eq 0 ]; then
+            echo "::error::No changeset found. Please run 'npx changeset' to add a changeset describing your changes."
+            exit 1
+          fi
+          echo "Found $CHANGESETS changeset(s)."
