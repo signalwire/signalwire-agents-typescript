@@ -1161,11 +1161,19 @@ export class AgentBase {
 
     // Root - returns SWML
     const handleSwml = async (c: any) => {
+      let reqLog = this.log.bind({ endpoint: this.route });
+      reqLog.debug('endpoint_called');
+
       let body: Record<string, unknown> = {};
       try { body = await c.req.json(); } catch { /* GET or no body */ }
 
+      reqLog.debug('request_body_received', { body_size: JSON.stringify(body).length });
+
       this.detectProxyFromRequest(c);
       await this.onSwmlRequest(body);
+
+      const callId = (body['call_id'] as string) || undefined;
+      if (callId) reqLog = reqLog.bind({ call_id: callId });
 
       let agentToUse: AgentBase = this;
       if (this.dynamicConfigCallback) {
@@ -1176,10 +1184,12 @@ export class AgentBase {
         const headers: Record<string, string> = {};
         c.req.raw.headers.forEach((v: string, k: string) => { headers[k] = v; });
         await this.dynamicConfigCallback(queryParams, body, headers, agentToUse);
+        reqLog.debug('dynamic_config_complete');
       }
 
-      const callId = (body['call_id'] as string) || undefined;
       const swml = agentToUse.renderSwml(callId);
+      reqLog.debug('swml_rendered', { swml_size: swml.length });
+      reqLog.info('request_successful');
       return c.json(JSON.parse(swml));
     };
 
@@ -1192,14 +1202,24 @@ export class AgentBase {
 
     // SWAIG function dispatcher
     const handleSwaig = async (c: any) => {
+      let reqLog = this.log.bind({ endpoint: `${basePath}/swaig` });
+      reqLog.debug('endpoint_called');
+
       let body: Record<string, unknown> = {};
       try { body = await c.req.json(); } catch { /* empty */ }
 
       const fnName = body['function'] as string;
       if (!fnName) return c.json({ error: 'Missing function name' }, 400);
 
+      reqLog = reqLog.bind({ function: fnName });
+      reqLog.debug('function_call_received');
+
+      const callIdStr = (body['call_id'] as string) ?? '';
+      if (callIdStr) reqLog = reqLog.bind({ call_id: callIdStr });
+
       const fn = this.toolRegistry.get(fnName);
       if (!fn || !(fn instanceof SwaigFunction)) {
+        reqLog.warn('function_not_found', { available_functions: [...this.toolRegistry.keys()] });
         return c.json({ error: `Unknown function: ${fnName}` }, 404);
       }
 
@@ -1207,16 +1227,30 @@ export class AgentBase {
       if (fn.secure) {
         const url = new URL(c.req.url);
         const token = url.searchParams.get('__token') ?? url.searchParams.get('token');
-        const callId = (body['call_id'] as string) ?? '';
-        if (!token || !this.sessionManager.validateToken(callId, fnName, token)) {
+        if (!token) {
+          reqLog.warn('missing_token');
           return c.json({ error: 'Invalid or expired token' }, 403);
         }
+        if (!this.sessionManager.validateToken(callIdStr, fnName, token)) {
+          reqLog.warn('token_invalid');
+          return c.json({ error: 'Invalid or expired token' }, 403);
+        }
+        reqLog.debug('token_valid');
       }
 
       const args = (body['argument'] as Record<string, unknown>) ?? {};
+      reqLog.debug('executing_function', { args: JSON.stringify(args) });
       await this.onFunctionCall(fnName, args, body);
-      const result = await fn.execute(args, body);
-      return c.json(result);
+
+      try {
+        const result = await fn.execute(args, body);
+        reqLog.info('function_executed_successfully');
+        reqLog.debug('function_result', { result_size: JSON.stringify(result).length });
+        return c.json(result);
+      } catch (err) {
+        reqLog.error('function_execution_error', { error: err instanceof Error ? err.message : String(err) });
+        throw err;
+      }
     };
 
     app.get(`${basePath}/swaig`, authMw, handleSwaig);
@@ -1224,8 +1258,16 @@ export class AgentBase {
 
     // Post-prompt handler
     const handlePostPrompt = async (c: any) => {
+      let reqLog = this.log.bind({ endpoint: `${basePath}/post_prompt` });
+      reqLog.debug('endpoint_called');
+
       let body: Record<string, unknown> = {};
       try { body = await c.req.json(); } catch { /* empty */ }
+
+      const callId = (body['call_id'] as string) || undefined;
+      if (callId) reqLog = reqLog.bind({ call_id: callId });
+
+      reqLog.info('post_prompt_received');
 
       const summary = this.findSummary(body);
       await this.onSummary(summary, body);
@@ -1237,10 +1279,13 @@ export class AgentBase {
 
     // Debug events handler
     const handleDebugEvents = async (c: any) => {
+      const reqLog = this.log.bind({ endpoint: `${basePath}/debug_events` });
+      reqLog.debug('endpoint_called');
+
       let body: Record<string, unknown> = {};
       try { body = await c.req.json(); } catch { /* empty */ }
 
-      this.log.debug('Debug event received', body);
+      reqLog.debug('debug_event_received', body);
       await this.onDebugEvent(body);
       return c.json({ ok: true });
     };

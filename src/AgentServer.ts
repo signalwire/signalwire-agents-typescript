@@ -141,6 +141,10 @@ export class AgentServer {
 
     const app = this.getApp();
 
+    if (this.agents.size === 0) {
+      this.log.warn('starting_server_with_no_agents');
+    }
+
     this.log.info(`Starting on http://${h}:${p}`);
     for (const [route, agent] of this.agents) {
       const [user] = agent.getBasicAuthCredentials();

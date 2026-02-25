@@ -6,6 +6,7 @@
  */
 
 import { randomBytes, createHmac } from 'node:crypto';
+import { getLogger } from './Logger.js';
 
 /** Stateless HMAC-SHA256 token manager for SWAIG function call authentication and per-session metadata storage. */
 export class SessionManager {
@@ -13,6 +14,7 @@ export class SessionManager {
   tokenExpirySecs: number;
   private secretKey: string;
   private sessionMetadata: Map<string, Record<string, unknown>> = new Map();
+  private log = getLogger('SessionManager');
 
   /**
    * Create a new SessionManager.
@@ -49,7 +51,9 @@ export class SessionManager {
       .digest('hex')
       .slice(0, 16);
     const token = `${callId}.${functionName}.${expiry}.${nonce}.${signature}`;
-    return Buffer.from(token).toString('base64url');
+    const encoded = Buffer.from(token).toString('base64url');
+    this.log.debug('created_token', { function: functionName, call_id: callId, token_prefix: encoded.slice(0, 20) });
+    return encoded;
   }
 
   /**
@@ -73,25 +77,42 @@ export class SessionManager {
     try {
       const decoded = Buffer.from(token, 'base64url').toString();
       const parts = decoded.split('.');
-      if (parts.length !== 5) return false;
+      if (parts.length !== 5) {
+        this.log.warn('token_invalid', { function: functionName });
+        return false;
+      }
       const [tokenCallId, tokenFunction, tokenExpiry, tokenNonce, tokenSignature] = parts;
 
       const effectiveCallId = callId || tokenCallId;
-      if (tokenFunction !== functionName) return false;
+      if (tokenFunction !== functionName) {
+        this.log.warn('token_function_mismatch', { expected: functionName, got: tokenFunction });
+        return false;
+      }
 
       const expiry = parseInt(tokenExpiry, 10);
-      if (expiry < Date.now() / 1000) return false;
+      if (expiry < Date.now() / 1000) {
+        this.log.warn('token_expired', { function: functionName });
+        return false;
+      }
 
       const message = `${tokenCallId}:${tokenFunction}:${tokenExpiry}:${tokenNonce}`;
       const expectedSig = createHmac('sha256', this.secretKey)
         .update(message)
         .digest('hex')
         .slice(0, 16);
-      if (tokenSignature !== expectedSig) return false;
-      if (tokenCallId !== effectiveCallId) return false;
+      if (tokenSignature !== expectedSig) {
+        this.log.warn('token_invalid', { function: functionName });
+        return false;
+      }
+      if (tokenCallId !== effectiveCallId) {
+        this.log.warn('token_call_id_mismatch', { expected: effectiveCallId, got: tokenCallId });
+        return false;
+      }
 
+      this.log.debug('token_valid', { function: functionName });
       return true;
     } catch {
+      this.log.warn('token_invalid', { function: functionName });
       return false;
     }
   }

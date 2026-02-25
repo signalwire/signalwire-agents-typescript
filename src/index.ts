@@ -62,7 +62,7 @@ export type { AuthConfig } from './AuthHandler.js';
 export { ConfigLoader } from './ConfigLoader.js';
 
 // Logging
-export { Logger, getLogger, setGlobalLogLevel, suppressAllLogs, setGlobalLogFormat, setGlobalLogColor, resetLoggingConfiguration } from './Logger.js';
+export { Logger, getLogger, setGlobalLogLevel, suppressAllLogs, setGlobalLogFormat, setGlobalLogColor, setGlobalLogStream, resetLoggingConfiguration, getExecutionMode } from './Logger.js';
 
 // Serverless
 export { ServerlessAdapter } from './ServerlessAdapter.js';
