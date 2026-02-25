@@ -16,6 +16,8 @@ export interface AgentOptions {
   recordStereo?: boolean;
   defaultWebhookUrl?: string;
   nativeFunctions?: string[];
+  agentId?: string;
+  suppressLogs?: boolean;
 }
 
 export interface LanguageConfig {

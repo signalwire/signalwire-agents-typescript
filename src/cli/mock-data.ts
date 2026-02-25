@@ -7,8 +7,11 @@ import { randomBytes } from 'node:crypto';
 export interface MockCallOptions {
   callType?: 'sip' | 'webrtc';
   callDirection?: 'inbound' | 'outbound';
+  callState?: string;
+  callId?: string;
   fromNumber?: string;
   toExtension?: string;
+  overrides?: Record<string, unknown>;
 }
 
 function randomId(): string {
@@ -23,17 +26,19 @@ function randomUuid(): string {
 export function generateFakePostData(opts?: MockCallOptions): Record<string, unknown> {
   const callType = opts?.callType ?? 'webrtc';
   const callDirection = opts?.callDirection ?? 'inbound';
+  const callState = opts?.callState ?? 'active';
   const fromNumber = opts?.fromNumber ?? '+15551234567';
   const toExtension = opts?.toExtension ?? 'test-agent';
-  const callId = randomUuid();
+  const callId = opts?.callId ?? randomUuid();
   const nodeId = randomUuid();
   const projectId = randomUuid();
   const spaceId = randomUuid();
 
-  return {
+  const data: Record<string, unknown> = {
     call_id: callId,
     call_type: callType,
     call_direction: callDirection,
+    call_state: callState,
     node_id: nodeId,
     project_id: projectId,
     space_id: spaceId,
@@ -51,16 +56,24 @@ export function generateFakePostData(opts?: MockCallOptions): Record<string, unk
       direction: callDirection,
     },
   };
+
+  // Apply overrides
+  if (opts?.overrides) {
+    Object.assign(data, opts.overrides);
+  }
+
+  return data;
 }
 
 export function generateMinimalPostData(
   fnName: string,
   args?: Record<string, unknown>,
+  opts?: { callId?: string; overrides?: Record<string, unknown> },
 ): Record<string, unknown> {
-  return {
+  const data: Record<string, unknown> = {
     function: fnName,
     argument: args ?? {},
-    call_id: randomUuid(),
+    call_id: opts?.callId ?? randomUuid(),
     call_type: 'webrtc',
     call_direction: 'inbound',
     caller_id_name: 'CLI Test',
@@ -68,4 +81,10 @@ export function generateMinimalPostData(
     from: '+15551234567',
     to: 'test-agent',
   };
+
+  if (opts?.overrides) {
+    Object.assign(data, opts.overrides);
+  }
+
+  return data;
 }

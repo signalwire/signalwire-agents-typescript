@@ -3,6 +3,7 @@ import { AgentBase } from '../src/AgentBase.js';
 import { SwaigFunctionResult } from '../src/SwaigFunctionResult.js';
 import { ContextBuilder } from '../src/ContextBuilder.js';
 import { DataMap } from '../src/DataMap.js';
+import { SkillBase, type SkillManifest, type SkillToolDefinition } from '../src/skills/SkillBase.js';
 
 describe('AgentBase', () => {
   function createAgent(opts?: Partial<Parameters<typeof AgentBase.prototype.setPromptText>[0]>) {
@@ -357,5 +358,336 @@ describe('AgentBase', () => {
   it('getTool returns undefined for missing tool', () => {
     const agent = createAgent();
     expect(agent.getTool('nope')).toBeUndefined();
+  });
+
+  // ── Pass 1: Agent Enhancements ────────────────────────────────────
+
+  it('getName returns the agent name', () => {
+    const agent = new AgentBase({ name: 'my-agent', route: '/test' });
+    expect(agent.getName()).toBe('my-agent');
+  });
+
+  it('agentId defaults to random hex', () => {
+    const agent = createAgent();
+    expect(agent.agentId).toBeDefined();
+    expect(typeof agent.agentId).toBe('string');
+    expect(agent.agentId.length).toBe(16); // 8 bytes hex
+  });
+
+  it('agentId can be provided via options', () => {
+    const agent = new AgentBase({ name: 'test', route: '/test', agentId: 'custom-id-123' } as any);
+    expect(agent.agentId).toBe('custom-id-123');
+  });
+
+  it('clearPreAnswerVerbs removes pre-answer verbs', () => {
+    const agent = createAgent();
+    agent.setPromptText('hello');
+    agent.addPreAnswerVerb('play', { url: 'ring:us' });
+    agent.addPreAnswerVerb('play', { url: 'ring:uk' });
+    agent.clearPreAnswerVerbs();
+    const swml = JSON.parse(agent.renderSwml());
+    const main = swml.sections.main;
+    // Should only have answer + ai, no pre-answer verbs
+    expect(main.length).toBe(2);
+    expect(main[0]).toHaveProperty('answer');
+  });
+
+  it('clearPostAnswerVerbs removes post-answer verbs', () => {
+    const agent = createAgent();
+    agent.setPromptText('hello');
+    agent.addPostAnswerVerb('play', { url: 'say:Welcome' });
+    agent.clearPostAnswerVerbs();
+    const swml = JSON.parse(agent.renderSwml());
+    const main = swml.sections.main;
+    expect(main.length).toBe(2);
+  });
+
+  it('clearPostAiVerbs removes post-ai verbs', () => {
+    const agent = createAgent();
+    agent.setPromptText('hello');
+    agent.addPostAiVerb('hangup', {});
+    agent.clearPostAiVerbs();
+    const swml = JSON.parse(agent.renderSwml());
+    const main = swml.sections.main;
+    expect(main.length).toBe(2);
+  });
+
+  it('clear*Verbs methods return this for chaining', () => {
+    const agent = createAgent();
+    const result = agent.clearPreAnswerVerbs().clearPostAnswerVerbs().clearPostAiVerbs();
+    expect(result).toBe(agent);
+  });
+
+  it('suppressLogs option suppresses log output', async () => {
+    // We test that no error is thrown; the actual suppression is tested in Logger tests
+    const { suppressAllLogs: suppress } = await import('../src/Logger.js');
+    suppress(false); // reset
+    const agent = new AgentBase({ name: 'test', route: '/test', suppressLogs: true } as any);
+    expect(agent).toBeDefined();
+    suppress(false); // cleanup
+  });
+
+  // ── Security env vars ─────────────────────────────────────────────
+
+  it('request size limit returns 413 for oversized requests', async () => {
+    const saved = process.env['SWML_MAX_REQUEST_SIZE'];
+    process.env['SWML_MAX_REQUEST_SIZE'] = '50'; // 50 bytes
+    try {
+      const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+      agent.setPromptText('hello');
+      const app = agent.getApp();
+      const res = await app.request('/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa('u:p'),
+          'Content-Type': 'application/json',
+          'Content-Length': '100000',
+        },
+        body: JSON.stringify({ data: 'x'.repeat(100000) }),
+      });
+      expect(res.status).toBe(413);
+    } finally {
+      if (saved) process.env['SWML_MAX_REQUEST_SIZE'] = saved;
+      else delete process.env['SWML_MAX_REQUEST_SIZE'];
+    }
+  });
+
+  it('SWML_ALLOWED_HOSTS blocks disallowed hosts', async () => {
+    const saved = process.env['SWML_ALLOWED_HOSTS'];
+    process.env['SWML_ALLOWED_HOSTS'] = 'allowed.example.com, other.test';
+    try {
+      const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+      agent.setPromptText('hello');
+      const app = agent.getApp();
+
+      // Disallowed host
+      const res = await app.request('http://evil.example.com/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa('u:p'),
+          'Content-Type': 'application/json',
+          'Host': 'evil.example.com',
+        },
+        body: '{}',
+      });
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.error).toContain('host not allowed');
+    } finally {
+      if (saved) process.env['SWML_ALLOWED_HOSTS'] = saved;
+      else delete process.env['SWML_ALLOWED_HOSTS'];
+    }
+  });
+
+  it('SWML_ALLOWED_HOSTS allows matching hosts', async () => {
+    const saved = process.env['SWML_ALLOWED_HOSTS'];
+    process.env['SWML_ALLOWED_HOSTS'] = 'allowed.example.com, other.test';
+    try {
+      const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+      agent.setPromptText('hello');
+      const app = agent.getApp();
+
+      // Allowed host
+      const res = await app.request('http://allowed.example.com/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa('u:p'),
+          'Content-Type': 'application/json',
+          'Host': 'allowed.example.com',
+        },
+        body: '{}',
+      });
+      expect(res.status).toBe(200);
+    } finally {
+      if (saved) process.env['SWML_ALLOWED_HOSTS'] = saved;
+      else delete process.env['SWML_ALLOWED_HOSTS'];
+    }
+  });
+
+  it('SWML_RATE_LIMIT returns 429 when exceeded', async () => {
+    const saved = process.env['SWML_RATE_LIMIT'];
+    process.env['SWML_RATE_LIMIT'] = '2'; // 2 requests per minute
+    try {
+      const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+      agent.setPromptText('hello');
+      const app = agent.getApp();
+
+      const makeReq = () => app.request('/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa('u:p'),
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': '1.2.3.4',
+        },
+        body: '{}',
+      });
+
+      // First two should succeed
+      const r1 = await makeReq();
+      expect(r1.status).toBe(200);
+      const r2 = await makeReq();
+      expect(r2.status).toBe(200);
+
+      // Third should be rate limited
+      const r3 = await makeReq();
+      expect(r3.status).toBe(429);
+      const body = await r3.json();
+      expect(body.error).toContain('Rate limit');
+    } finally {
+      if (saved) process.env['SWML_RATE_LIMIT'] = saved;
+      else delete process.env['SWML_RATE_LIMIT'];
+    }
+  });
+
+  // ── Pass 4: Tool lifecycle + defineTools + onFunctionCall ───────
+
+  it('defineTools is not called automatically — subclass calls it explicitly', () => {
+    let defineToolsCalled = false;
+    class MyAgent extends AgentBase {
+      constructor(opts: Parameters<typeof AgentBase.prototype.constructor>[0]) {
+        super(opts as any);
+        this.defineTools();
+      }
+      protected override defineTools(): void {
+        defineToolsCalled = true;
+        this.defineTool({
+          name: 'auto_tool',
+          description: 'Auto-registered tool',
+          parameters: {},
+          handler: () => new SwaigFunctionResult('auto'),
+        });
+      }
+    }
+    const agent = new MyAgent({ name: 'test', route: '/test' });
+    expect(defineToolsCalled).toBe(true);
+    expect(agent.getTool('auto_tool')).toBeDefined();
+  });
+
+  it('PROMPT_SECTIONS static property applies prompt sections', () => {
+    class PromptAgent extends AgentBase {
+      static PROMPT_SECTIONS = [
+        { title: 'Role', body: 'You are a test agent' },
+        { title: 'Rules', bullets: ['Be helpful', 'Be concise'] },
+      ];
+    }
+    const agent = new PromptAgent({ name: 'test', route: '/test' });
+    const prompt = agent.getPrompt();
+    expect(prompt).toContain('Role');
+    expect(prompt).toContain('You are a test agent');
+    expect(prompt).toContain('Be helpful');
+  });
+
+  it('onFunctionCall hook is invoked when SWAIG function called', async () => {
+    const calls: string[] = [];
+    class HookAgent extends AgentBase {
+      onFunctionCall(name: string, _args: Record<string, unknown>, _rawData: Record<string, unknown>): void {
+        calls.push(name);
+      }
+    }
+    const agent = new HookAgent({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+    agent.defineTool({
+      name: 'test_fn',
+      description: 'Test',
+      parameters: {},
+      handler: () => new SwaigFunctionResult('ok'),
+    });
+    const app = agent.getApp();
+    const res = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'test_fn', argument: {} }),
+    });
+    expect(res.status).toBe(200);
+    expect(calls).toContain('test_fn');
+  });
+
+  it('validateBasicAuth hook default returns true', () => {
+    const agent = createAgent();
+    expect(agent.validateBasicAuth('any', 'pass')).toBe(true);
+  });
+
+  it('CORS origin defaults to *', async () => {
+    const saved = process.env['SWML_CORS_ORIGINS'];
+    delete process.env['SWML_CORS_ORIGINS'];
+    try {
+      const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+      const app = agent.getApp();
+      const res = await app.request('/health', {
+        method: 'OPTIONS',
+        headers: {
+          'Origin': 'https://example.com',
+          'Access-Control-Request-Method': 'POST',
+        },
+      });
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    } finally {
+      if (saved) process.env['SWML_CORS_ORIGINS'] = saved;
+    }
+  });
+
+  // ── Pass 5: Skills integration ──────────────────────────────────
+
+  it('addSkill registers skill tools and prompt sections', async () => {
+    class TestSkill extends SkillBase {
+      constructor() { super('test_skill'); }
+      getManifest(): SkillManifest { return { name: 'test_skill', description: 'Test', version: '1.0.0' }; }
+      getTools(): SkillToolDefinition[] {
+        return [{
+          name: 'skill_tool',
+          description: 'Skill tool',
+          handler: () => new SwaigFunctionResult('skill result'),
+        }];
+      }
+      getPromptSections() { return [{ title: 'Skill Info', body: 'From test skill' }]; }
+      getHints() { return ['skill hint']; }
+    }
+
+    const agent = createAgent();
+    agent.setPromptText('base prompt');
+    await agent.addSkill(new TestSkill());
+
+    expect(agent.getTool('skill_tool')).toBeDefined();
+    expect(agent.hasSkill('test_skill')).toBe(true);
+    expect(agent.listSkills()).toHaveLength(1);
+  });
+
+  it('removeSkill removes a skill', async () => {
+    class RemoveSkill extends SkillBase {
+      constructor() { super('removable'); }
+      getManifest(): SkillManifest { return { name: 'removable', description: 'Test', version: '1.0.0' }; }
+      getTools(): SkillToolDefinition[] { return []; }
+    }
+
+    const agent = createAgent();
+    const skill = new RemoveSkill();
+    await agent.addSkill(skill);
+    expect(agent.hasSkill('removable')).toBe(true);
+    await agent.removeSkill(skill.instanceId);
+    expect(agent.hasSkill('removable')).toBe(false);
+  });
+
+  it('addSkill returns this for chaining', async () => {
+    class ChainSkill extends SkillBase {
+      constructor() { super('chain'); }
+      getManifest(): SkillManifest { return { name: 'chain', description: 'Test', version: '1.0.0' }; }
+      getTools(): SkillToolDefinition[] { return []; }
+    }
+
+    const agent = createAgent();
+    const result = await agent.addSkill(new ChainSkill());
+    expect(result).toBe(agent);
+  });
+
+  it('listSkills returns empty when no skills', () => {
+    const agent = createAgent();
+    expect(agent.listSkills()).toHaveLength(0);
+  });
+
+  it('hasSkill returns false when no skills', () => {
+    const agent = createAgent();
+    expect(agent.hasSkill('nope')).toBe(false);
   });
 });

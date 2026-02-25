@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Logger, getLogger, setGlobalLogLevel, suppressAllLogs } from '../src/Logger.js';
+import { Logger, getLogger, setGlobalLogLevel, suppressAllLogs, setGlobalLogFormat, setGlobalLogColor, resetLoggingConfiguration } from '../src/Logger.js';
 
 describe('Logger', () => {
   let spyDebug: ReturnType<typeof vi.spyOn>;
@@ -13,12 +13,16 @@ describe('Logger', () => {
     spyWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     spyError = vi.spyOn(console, 'error').mockImplementation(() => {});
     setGlobalLogLevel('debug');
+    setGlobalLogColor(false);
+    setGlobalLogFormat('text');
     suppressAllLogs(false);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     setGlobalLogLevel('info');
+    setGlobalLogFormat('text');
+    setGlobalLogColor(false);
     suppressAllLogs(false);
   });
 
@@ -119,5 +123,96 @@ describe('Logger', () => {
     expect(spyInfo).toHaveBeenCalledOnce();
     expect(spyWarn).toHaveBeenCalledOnce();
     expect(spyError).toHaveBeenCalledOnce();
+  });
+
+  // ── Pass 2: New logger features ──────────────────────────────────
+
+  it('JSON format outputs structured JSON', () => {
+    setGlobalLogFormat('json');
+    const log = getLogger('mymod');
+    log.info('hello world');
+    expect(spyInfo).toHaveBeenCalledOnce();
+    const output = spyInfo.mock.calls[0][0] as string;
+    const parsed = JSON.parse(output);
+    expect(parsed.level).toBe('info');
+    expect(parsed.logger).toBe('mymod');
+    expect(parsed.message).toBe('hello world');
+    expect(parsed.timestamp).toBeDefined();
+  });
+
+  it('JSON format includes data fields', () => {
+    setGlobalLogFormat('json');
+    const log = getLogger('test');
+    log.warn('alert', { code: 500, path: '/api' });
+    const output = spyWarn.mock.calls[0][0] as string;
+    const parsed = JSON.parse(output);
+    expect(parsed.code).toBe(500);
+    expect(parsed.path).toBe('/api');
+  });
+
+  it('bind creates child logger with context', () => {
+    const log = getLogger('test');
+    const child = log.bind({ callId: 'call-42', function: 'get_time' });
+    child.info('processing');
+    const output = spyInfo.mock.calls[0][0] as string;
+    expect(output).toContain('"callId":"call-42"');
+    expect(output).toContain('"function":"get_time"');
+  });
+
+  it('bind context merges with log data', () => {
+    const log = getLogger('test').bind({ callId: 'c1' });
+    log.info('msg', { extra: true });
+    const output = spyInfo.mock.calls[0][0] as string;
+    expect(output).toContain('"callId":"c1"');
+    expect(output).toContain('"extra":true');
+  });
+
+  it('bind context can be chained', () => {
+    const log = getLogger('test')
+      .bind({ callId: 'c1' })
+      .bind({ step: 'auth' });
+    log.info('ok');
+    const output = spyInfo.mock.calls[0][0] as string;
+    expect(output).toContain('"callId":"c1"');
+    expect(output).toContain('"step":"auth"');
+  });
+
+  it('color output includes ANSI codes', () => {
+    setGlobalLogColor(true);
+    const log = getLogger('test');
+    log.info('colorful');
+    const output = spyInfo.mock.calls[0][0] as string;
+    expect(output).toContain('\x1b[32m'); // green for info
+    expect(output).toContain('\x1b[0m'); // reset
+  });
+
+  it('no ANSI codes when color disabled', () => {
+    setGlobalLogColor(false);
+    const log = getLogger('test');
+    log.error('plain');
+    const output = spyError.mock.calls[0][0] as string;
+    expect(output).not.toContain('\x1b[');
+  });
+
+  it('resetLoggingConfiguration restores defaults', () => {
+    setGlobalLogLevel('error');
+    setGlobalLogFormat('json');
+    suppressAllLogs(true);
+    resetLoggingConfiguration();
+    // After reset, should use env vars or defaults
+    const log = getLogger('test');
+    log.info('after reset');
+    // Since logs were re-enabled and level reset to 'info', this should log
+    expect(spyInfo).toHaveBeenCalledOnce();
+  });
+
+  it('JSON format in bind context', () => {
+    setGlobalLogFormat('json');
+    const log = getLogger('test').bind({ reqId: 'r1' });
+    log.debug('check');
+    const output = spyDebug.mock.calls[0][0] as string;
+    const parsed = JSON.parse(output);
+    expect(parsed.reqId).toBe('r1');
+    expect(parsed.message).toBe('check');
   });
 });

@@ -7,6 +7,27 @@
 
 import { SwaigFunctionResult } from './SwaigFunctionResult.js';
 
+const ENV_PATTERN = /\$\{ENV\.([^}]+)\}/g;
+
+function expandEnvVars(value: string): string {
+  return value.replace(ENV_PATTERN, (_match, varName: string) => {
+    return process.env[varName] ?? '';
+  });
+}
+
+function expandEnvInObject(obj: unknown): unknown {
+  if (typeof obj === 'string') return expandEnvVars(obj);
+  if (Array.isArray(obj)) return obj.map(expandEnvInObject);
+  if (obj && typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      result[k] = expandEnvInObject(v);
+    }
+    return result;
+  }
+  return obj;
+}
+
 export class DataMap {
   functionName: string;
   private _purpose = '';
@@ -15,9 +36,16 @@ export class DataMap {
   private _webhooks: Record<string, unknown>[] = [];
   private _output: Record<string, unknown> | null = null;
   private _errorKeys: string[] = [];
+  private _expandEnv = false;
 
   constructor(functionName: string) {
     this.functionName = functionName;
+  }
+
+  /** Enable ${ENV.*} variable expansion in URLs, bodies, and outputs */
+  enableEnvExpansion(enabled = true): this {
+    this._expandEnv = enabled;
+    return this;
   }
 
   purpose(description: string): this {
@@ -141,6 +169,12 @@ export class DataMap {
     return this;
   }
 
+  /** Register this DataMap tool with an AgentBase instance */
+  registerWithAgent(agent: { registerSwaigFunction(fn: Record<string, unknown>): unknown }): this {
+    agent.registerSwaigFunction(this.toSwaigFunction());
+    return this;
+  }
+
   toSwaigFunction(): Record<string, unknown> {
     // Build parameter schema
     let paramSchema: Record<string, unknown>;
@@ -164,12 +198,18 @@ export class DataMap {
     if (this._output) dataMap['output'] = this._output;
     if (this._errorKeys.length) dataMap['error_keys'] = this._errorKeys;
 
-    return {
+    let result: Record<string, unknown> = {
       function: this.functionName,
       description: this._purpose || `Execute ${this.functionName}`,
       parameters: paramSchema,
       data_map: dataMap,
     };
+
+    if (this._expandEnv) {
+      result = expandEnvInObject(result) as Record<string, unknown>;
+    }
+
+    return result;
   }
 }
 

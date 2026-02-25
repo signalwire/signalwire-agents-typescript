@@ -10,6 +10,7 @@ import { randomBytes, createHmac } from 'node:crypto';
 export class SessionManager {
   tokenExpirySecs: number;
   private secretKey: string;
+  private sessionMetadata: Map<string, Record<string, unknown>> = new Map();
 
   constructor(tokenExpirySecs = 3600, secretKey?: string) {
     this.tokenExpirySecs = tokenExpirySecs;
@@ -68,5 +69,41 @@ export class SessionManager {
   /** Alias for validateToken with reordered params */
   validateToolToken(functionName: string, token: string, callId: string): boolean {
     return this.validateToken(callId, functionName, token);
+  }
+
+  /** Decode token components for debugging (does not validate) */
+  debugToken(token: string): { callId: string; functionName: string; expiry: number; nonce: string; signature: string; expired: boolean } | null {
+    try {
+      const decoded = Buffer.from(token, 'base64url').toString();
+      const parts = decoded.split('.');
+      if (parts.length !== 5) return null;
+      const [callId, functionName, expiryStr, nonce, signature] = parts;
+      const expiry = parseInt(expiryStr, 10);
+      return {
+        callId,
+        functionName,
+        expiry,
+        nonce,
+        signature,
+        expired: expiry < Date.now() / 1000,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Get metadata for a session */
+  getSessionMetadata(sessionId: string): Record<string, unknown> | undefined {
+    return this.sessionMetadata.get(sessionId);
+  }
+
+  /** Set metadata for a session */
+  setSessionMetadata(sessionId: string, metadata: Record<string, unknown>): void {
+    this.sessionMetadata.set(sessionId, { ...this.sessionMetadata.get(sessionId), ...metadata });
+  }
+
+  /** Delete metadata for a session */
+  deleteSessionMetadata(sessionId: string): boolean {
+    return this.sessionMetadata.delete(sessionId);
   }
 }

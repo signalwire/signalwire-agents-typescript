@@ -81,4 +81,59 @@ describe('SessionManager', () => {
     // Empty callId should use token's embedded callId
     expect(sm.validateToken('', 'fn', token)).toBe(true);
   });
+
+  // ── Pass 1: debugToken + session metadata ────────────────────────
+
+  it('debugToken decodes token components', () => {
+    const sm = new SessionManager();
+    const token = sm.generateToken('get_time', 'call-42');
+    const info = sm.debugToken(token);
+    expect(info).not.toBeNull();
+    expect(info!.callId).toBe('call-42');
+    expect(info!.functionName).toBe('get_time');
+    expect(typeof info!.expiry).toBe('number');
+    expect(typeof info!.nonce).toBe('string');
+    expect(typeof info!.signature).toBe('string');
+    expect(info!.expired).toBe(false);
+  });
+
+  it('debugToken returns null for invalid token', () => {
+    const sm = new SessionManager();
+    expect(sm.debugToken('not-valid')).toBeNull();
+  });
+
+  it('debugToken shows expired status for expired tokens', () => {
+    const sm = new SessionManager(0); // 0 second expiry
+    const token = sm.generateToken('fn', 'call-1');
+    const info = sm.debugToken(token);
+    expect(info).not.toBeNull();
+    expect(info!.expired).toBe(true);
+  });
+
+  it('setSessionMetadata stores and retrieves metadata', () => {
+    const sm = new SessionManager();
+    sm.setSessionMetadata('session-1', { caller: 'John', topic: 'billing' });
+    const meta = sm.getSessionMetadata('session-1');
+    expect(meta).toEqual({ caller: 'John', topic: 'billing' });
+  });
+
+  it('setSessionMetadata merges with existing metadata', () => {
+    const sm = new SessionManager();
+    sm.setSessionMetadata('session-1', { caller: 'John' });
+    sm.setSessionMetadata('session-1', { topic: 'billing' });
+    const meta = sm.getSessionMetadata('session-1');
+    expect(meta).toEqual({ caller: 'John', topic: 'billing' });
+  });
+
+  it('getSessionMetadata returns undefined for unknown session', () => {
+    const sm = new SessionManager();
+    expect(sm.getSessionMetadata('nope')).toBeUndefined();
+  });
+
+  it('deleteSessionMetadata removes metadata', () => {
+    const sm = new SessionManager();
+    sm.setSessionMetadata('session-1', { key: 'val' });
+    expect(sm.deleteSessionMetadata('session-1')).toBe(true);
+    expect(sm.getSessionMetadata('session-1')).toBeUndefined();
+  });
 });

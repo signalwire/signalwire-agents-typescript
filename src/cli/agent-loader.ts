@@ -32,15 +32,32 @@ function isAgentClass(obj: unknown): boolean {
   );
 }
 
-export async function loadAgent(agentPath: string): Promise<unknown> {
+async function importModule(agentPath: string): Promise<Record<string, unknown>> {
   const absPath = resolve(agentPath);
   const fileUrl = pathToFileURL(absPath).href;
 
-  let mod: Record<string, unknown>;
   try {
-    mod = await import(fileUrl);
+    return await import(fileUrl);
   } catch (err) {
     throw new Error(`Failed to import agent file: ${absPath}\n${err}`);
+  }
+}
+
+export async function loadAgent(agentPath: string, agentClass?: string): Promise<unknown> {
+  const mod = await importModule(agentPath);
+
+  // If a specific class name is requested
+  if (agentClass) {
+    const target = mod[agentClass];
+    if (!target) {
+      throw new Error(`Export '${agentClass}' not found in ${agentPath}`);
+    }
+    if (isAgentInstance(target)) return target;
+    if (isAgentClass(target)) {
+      const Cls = target as new (opts: { name: string }) => unknown;
+      return new Cls({ name: agentClass.toLowerCase() });
+    }
+    throw new Error(`Export '${agentClass}' is not an AgentBase instance or class`);
   }
 
   // 1. Named export `agent`
@@ -75,7 +92,23 @@ export async function loadAgent(agentPath: string): Promise<unknown> {
   }
 
   throw new Error(
-    `Could not find an AgentBase instance or subclass in ${absPath}.\n` +
+    `Could not find an AgentBase instance or subclass in ${resolve(agentPath)}.\n` +
     'Export your agent as `export const agent = new AgentBase(...)` or as default export.',
   );
+}
+
+/**
+ * List all exported agent instances and classes in a module.
+ */
+export async function listAgents(agentPath: string): Promise<string[]> {
+  const mod = await importModule(agentPath);
+  const agents: string[] = [];
+
+  for (const key of Object.keys(mod)) {
+    if (isAgentInstance(mod[key]) || isAgentClass(mod[key])) {
+      agents.push(key);
+    }
+  }
+
+  return agents;
 }

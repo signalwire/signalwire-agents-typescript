@@ -63,5 +63,32 @@ describe('mock-data', () => {
       const data2 = generateMinimalPostData('fn');
       expect(data1.call_id).not.toBe(data2.call_id);
     });
+
+    it('accepts callId override', () => {
+      const data = generateMinimalPostData('fn', {}, { callId: 'my-call-id' });
+      expect(data.call_id).toBe('my-call-id');
+    });
+
+    it('accepts overrides', () => {
+      const data = generateMinimalPostData('fn', {}, { overrides: { custom_field: 'custom_value' } });
+      expect(data['custom_field']).toBe('custom_value');
+    });
+  });
+
+  describe('generateFakePostData - extended', () => {
+    it('includes call_state', () => {
+      const data = generateFakePostData({ callState: 'ringing' });
+      expect(data.call_state).toBe('ringing');
+    });
+
+    it('accepts callId override', () => {
+      const data = generateFakePostData({ callId: 'fixed-call-id' });
+      expect(data.call_id).toBe('fixed-call-id');
+    });
+
+    it('applies overrides to post data', () => {
+      const data = generateFakePostData({ overrides: { custom: 'value' } });
+      expect(data['custom']).toBe('value');
+    });
   });
 });

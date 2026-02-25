@@ -190,3 +190,97 @@ describe('createExpressionTool', () => {
     expect(exprs.length).toBe(1);
   });
 });
+
+// ── Pass 3: DataMap enhancements ──────────────────────────────────
+
+describe('DataMap - registerWithAgent', () => {
+  it('registers DataMap with an agent-like object', () => {
+    const registered: Record<string, unknown>[] = [];
+    const mockAgent = {
+      registerSwaigFunction(fn: Record<string, unknown>) {
+        registered.push(fn);
+      },
+    };
+    const dm = new DataMap('my_tool')
+      .purpose('Test tool')
+      .webhook('GET', 'https://example.com')
+      .output(new SwaigFunctionResult('ok'));
+
+    dm.registerWithAgent(mockAgent);
+    expect(registered.length).toBe(1);
+    expect(registered[0]['function']).toBe('my_tool');
+  });
+
+  it('registerWithAgent returns this for chaining', () => {
+    const mockAgent = { registerSwaigFunction() {} };
+    const dm = new DataMap('fn')
+      .webhook('GET', 'https://example.com')
+      .output(new SwaigFunctionResult('ok'));
+    expect(dm.registerWithAgent(mockAgent)).toBe(dm);
+  });
+});
+
+describe('DataMap - ENV expansion', () => {
+  it('expands ${ENV.*} variables in webhook URLs', () => {
+    const saved = process.env['TEST_API_KEY'];
+    process.env['TEST_API_KEY'] = 'secret123';
+    try {
+      const dm = new DataMap('fn')
+        .enableEnvExpansion()
+        .purpose('Test')
+        .webhook('GET', 'https://api.example.com?key=${ENV.TEST_API_KEY}')
+        .output(new SwaigFunctionResult('ok'));
+      const fn = dm.toSwaigFunction();
+      const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+      expect(webhooks[0]['url']).toBe('https://api.example.com?key=secret123');
+    } finally {
+      if (saved) process.env['TEST_API_KEY'] = saved;
+      else delete process.env['TEST_API_KEY'];
+    }
+  });
+
+  it('missing ENV vars expand to empty string', () => {
+    delete process.env['NONEXISTENT_VAR_12345'];
+    const dm = new DataMap('fn')
+      .enableEnvExpansion()
+      .webhook('GET', 'https://api.example.com?key=${ENV.NONEXISTENT_VAR_12345}')
+      .output(new SwaigFunctionResult('ok'));
+    const fn = dm.toSwaigFunction();
+    const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+    expect(webhooks[0]['url']).toBe('https://api.example.com?key=');
+  });
+
+  it('no expansion when enableEnvExpansion not called', () => {
+    process.env['TEST_NO_EXPAND'] = 'should-not-appear';
+    try {
+      const dm = new DataMap('fn')
+        .webhook('GET', 'https://api.example.com?key=${ENV.TEST_NO_EXPAND}')
+        .output(new SwaigFunctionResult('ok'));
+      const fn = dm.toSwaigFunction();
+      const webhooks = (fn['data_map'] as Record<string, unknown>)['webhooks'] as Record<string, unknown>[];
+      expect(webhooks[0]['url']).toBe('https://api.example.com?key=${ENV.TEST_NO_EXPAND}');
+    } finally {
+      delete process.env['TEST_NO_EXPAND'];
+    }
+  });
+
+  it('expands ENV vars in descriptions and outputs', () => {
+    process.env['TEST_SERVICE_NAME'] = 'MyService';
+    try {
+      const dm = new DataMap('fn')
+        .enableEnvExpansion()
+        .purpose('Call ${ENV.TEST_SERVICE_NAME} API')
+        .webhook('GET', 'https://example.com')
+        .output(new SwaigFunctionResult('ok'));
+      const fn = dm.toSwaigFunction();
+      expect(fn['description']).toBe('Call MyService API');
+    } finally {
+      delete process.env['TEST_SERVICE_NAME'];
+    }
+  });
+
+  it('enableEnvExpansion returns this for chaining', () => {
+    const dm = new DataMap('fn');
+    expect(dm.enableEnvExpansion()).toBe(dm);
+  });
+});

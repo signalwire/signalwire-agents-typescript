@@ -15,7 +15,9 @@ import { SwmlBuilder } from './SwmlBuilder.js';
 import { SwaigFunction, type SwaigHandler, type SwaigFunctionOptions } from './SwaigFunction.js';
 import { SwaigFunctionResult } from './SwaigFunctionResult.js';
 import { ContextBuilder } from './ContextBuilder.js';
-import { getLogger } from './Logger.js';
+import { getLogger, suppressAllLogs } from './Logger.js';
+import { SkillManager } from './skills/SkillManager.js';
+import type { SkillBase } from './skills/SkillBase.js';
 import type {
   AgentOptions,
   LanguageConfig,
@@ -29,6 +31,7 @@ export class AgentBase {
   route: string;
   host: string;
   port: number;
+  agentId: string;
 
   // Internal managers
   private promptManager: PromptManager;
@@ -88,6 +91,9 @@ export class AgentBase {
   // Logger
   protected log = getLogger('AgentBase');
 
+  // Skills
+  private skillManager = new SkillManager();
+
   // Hono app
   private _app: Hono | null = null;
 
@@ -96,12 +102,17 @@ export class AgentBase {
     this.route = (opts.route ?? '/').replace(/\/+$/, '') || '/';
     this.host = opts.host ?? '0.0.0.0';
     this.port = opts.port ?? parseInt(process.env['PORT'] ?? '3000', 10);
+    this.agentId = opts.agentId ?? randomBytes(8).toString('hex');
     this.autoAnswer = opts.autoAnswer ?? true;
     this._recordCall = opts.recordCall ?? false;
     this.recordFormat = opts.recordFormat ?? 'mp4';
     this.recordStereo = opts.recordStereo ?? true;
     this.defaultWebhookUrl = opts.defaultWebhookUrl ?? null;
     this.nativeFunctions = opts.nativeFunctions ?? [];
+
+    if (opts.suppressLogs) {
+      suppressAllLogs(true);
+    }
 
     this.promptManager = new PromptManager(opts.usePom ?? true);
     this.sessionManager = new SessionManager(opts.tokenExpirySecs ?? 3600);
@@ -122,6 +133,29 @@ export class AgentBase {
         this.basicAuthSource = 'generated';
       }
     }
+
+    // Apply static PROMPT_SECTIONS from the class if defined
+    const ctor = this.constructor as typeof AgentBase;
+    if (ctor.PROMPT_SECTIONS) {
+      for (const section of ctor.PROMPT_SECTIONS) {
+        this.promptAddSection(section.title, section);
+      }
+    }
+  }
+
+  /**
+   * Static prompt sections: subclasses can define these declaratively.
+   * Each entry is applied via promptAddSection() in the constructor.
+   */
+  static PROMPT_SECTIONS?: { title: string; body?: string; bullets?: string[]; numbered?: boolean }[];
+
+  /**
+   * Lifecycle method to register tools. Subclasses should call this at the
+   * end of their own constructor (after all fields are initialized).
+   * Not called automatically — call `this.defineTools()` explicitly.
+   */
+  protected defineTools(): void {
+    // Default no-op — subclasses override
   }
 
   // ── Prompt methods ──────────────────────────────────────────────────
@@ -367,6 +401,63 @@ export class AgentBase {
     return this;
   }
 
+  clearPreAnswerVerbs(): this {
+    this.preAnswerVerbs = [];
+    return this;
+  }
+
+  clearPostAnswerVerbs(): this {
+    this.postAnswerVerbs = [];
+    return this;
+  }
+
+  clearPostAiVerbs(): this {
+    this.postAiVerbs = [];
+    return this;
+  }
+
+  getName(): string {
+    return this.name;
+  }
+
+  // ── Skills ─────────────────────────────────────────────────────────
+
+  async addSkill(skill: SkillBase): Promise<this> {
+    await this.skillManager.addSkill(skill);
+
+    // Register skill tools
+    for (const toolDef of skill.getTools()) {
+      this.defineTool(toolDef);
+    }
+
+    // Inject prompt sections
+    for (const section of skill.getPromptSections()) {
+      this.promptAddSection(section.title, section);
+    }
+
+    // Inject hints
+    const hints = skill.getHints();
+    if (hints.length) this.addHints(hints);
+
+    // Merge global data
+    const globalData = skill.getGlobalData();
+    if (Object.keys(globalData).length) this.updateGlobalData(globalData);
+
+    return this;
+  }
+
+  async removeSkill(instanceId: string): Promise<boolean> {
+    return this.skillManager.removeSkill(instanceId);
+  }
+
+  listSkills(): { name: string; instanceId: string; initialized: boolean }[] {
+    return this.skillManager.listSkills();
+  }
+
+  hasSkill(skillName: string): boolean {
+    return this.skillManager.hasSkill(skillName);
+  }
+
   // ── Dynamic config ──────────────────────────────────────────────────
 
   setDynamicConfigCallback(cb: DynamicConfigCallback): this {
@@ -488,6 +579,16 @@ export class AgentBase {
   }
 
   onDebugEvent(_event: Record<string, unknown>): void | Promise<void> {
+    // Default no-op
+  }
+
+  /** Override to add custom basic auth validation logic */
+  validateBasicAuth(_username: string, _password: string): boolean | Promise<boolean> {
+    return true;
+  }
+
+  /** Pre-execution hook called before each SWAIG function. Override in subclasses. */
+  onFunctionCall(_name: string, _args: Record<string, unknown>, _rawData: Record<string, unknown>): void | Promise<void> {
     // Default no-op
   }
 
@@ -668,6 +769,8 @@ export class AgentBase {
     const app = new Hono();
 
     // Security headers
+    const requestTimeout = parseInt(process.env['SWML_REQUEST_TIMEOUT'] ?? '30000', 10);
+    const maxRequestSize = parseInt(process.env['SWML_MAX_REQUEST_SIZE'] ?? '1048576', 10);
     app.use('*', async (c, next) => {
       await next();
       c.res.headers.set('X-Content-Type-Options', 'nosniff');
@@ -676,8 +779,57 @@ export class AgentBase {
       c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
     });
 
-    // CORS
-    app.use('*', cors({ origin: '*', credentials: true }));
+    // Request size limit
+    app.use('*', async (c, next) => {
+      const contentLength = c.req.header('content-length');
+      if (contentLength && parseInt(contentLength, 10) > maxRequestSize) {
+        return c.json({ error: 'Request too large' }, 413);
+      }
+      await next();
+    });
+
+    // Allowed hosts (configurable via env)
+    const allowedHosts = process.env['SWML_ALLOWED_HOSTS'];
+    if (allowedHosts) {
+      const hostSet = new Set(allowedHosts.split(',').map(h => h.trim().toLowerCase()));
+      app.use('*', async (c, next) => {
+        const host = (c.req.header('host') ?? '').split(':')[0].toLowerCase();
+        if (!hostSet.has(host)) {
+          return c.json({ error: 'Forbidden: host not allowed' }, 403);
+        }
+        await next();
+      });
+    }
+
+    // Rate limiting (configurable via env, requests per minute per IP)
+    const rateLimitStr = process.env['SWML_RATE_LIMIT'];
+    if (rateLimitStr) {
+      const maxPerMinute = parseInt(rateLimitStr, 10);
+      if (maxPerMinute > 0) {
+        const hits = new Map<string, { count: number; resetAt: number }>();
+        app.use('*', async (c, next) => {
+          const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim()
+            ?? c.req.header('x-real-ip')
+            ?? 'unknown';
+          const now = Date.now();
+          let entry = hits.get(ip);
+          if (!entry || now >= entry.resetAt) {
+            entry = { count: 0, resetAt: now + 60_000 };
+            hits.set(ip, entry);
+          }
+          entry.count++;
+          if (entry.count > maxPerMinute) {
+            return c.json({ error: 'Rate limit exceeded' }, 429);
+          }
+          await next();
+        });
+      }
+    }
+
+    // CORS (configurable via env)
+    const corsOrigins = process.env['SWML_CORS_ORIGINS'];
+    const corsOrigin = corsOrigins ? corsOrigins.split(',').map(o => o.trim()) : '*';
+    app.use('*', cors({ origin: corsOrigin, credentials: true }));
 
     // Auth middleware
     const [user, pass] = this.basicAuthCreds;
@@ -740,6 +892,7 @@ export class AgentBase {
       }
 
       const args = (body['argument'] as Record<string, unknown>) ?? {};
+      await this.onFunctionCall(fnName, args, body);
       const result = await fn.execute(args, body);
       return c.json(result);
     };
