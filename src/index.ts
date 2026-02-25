@@ -9,6 +9,10 @@
 export { AgentBase } from './AgentBase.js';
 export { AgentServer } from './AgentServer.js';
 
+// SWML Service (non-AI call flows)
+export { SWMLService } from './SWMLService.js';
+export type { OnRequestCallback, SWMLServiceOptions } from './SWMLService.js';
+
 // Tool results & functions
 export { SwaigFunctionResult } from './SwaigFunctionResult.js';
 export type { PaymentPrompt, PaymentAction, PaymentParameter } from './SwaigFunctionResult.js';

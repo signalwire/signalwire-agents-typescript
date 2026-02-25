@@ -349,6 +349,10 @@ async function main(): Promise<void> {
 
   switch (opts.action) {
     case 'list-tools': {
+      if (typeof agent.getRegisteredTools !== 'function') {
+        console.log('This is a SWMLService (no tools). Use --dump-swml to see the SWML document.');
+        break;
+      }
       const tools = agent.getRegisteredTools();
       if (opts.raw || opts.formatJson) {
         console.log(JSON.stringify(tools, null, 2));
@@ -371,21 +375,29 @@ async function main(): Promise<void> {
     }
 
     case 'dump-swml': {
-      const postData = generateFakePostData({
-        callType: opts.callType,
-        callDirection: opts.callDirection,
-        callState: opts.callState,
-        callId: opts.callId,
-        fromNumber: opts.fromNumber,
-        toExtension: opts.toExtension,
-        overrides: opts.overrides,
-      });
-      const swml = agent.renderSwml(postData['call_id'] as string);
+      // SWMLService.renderSwml() returns an object; AgentBase.renderSwml() returns a string
+      let swmlJson: unknown;
+      if (typeof agent.getRegisteredTools !== 'function') {
+        // SWMLService — renderSwml returns object directly
+        swmlJson = agent.renderSwml();
+      } else {
+        // AgentBase — renderSwml(callId) returns JSON string
+        const postData = generateFakePostData({
+          callType: opts.callType,
+          callDirection: opts.callDirection,
+          callState: opts.callState,
+          callId: opts.callId,
+          fromNumber: opts.fromNumber,
+          toExtension: opts.toExtension,
+          overrides: opts.overrides,
+        });
+        swmlJson = JSON.parse(agent.renderSwml(postData['call_id'] as string));
+      }
       if (opts.raw || opts.formatJson) {
-        console.log(JSON.stringify(JSON.parse(swml), null, 2));
+        console.log(JSON.stringify(swmlJson, null, 2));
       } else {
         console.log('\n--- SWML Document ---\n');
-        console.log(JSON.stringify(JSON.parse(swml), null, 2));
+        console.log(JSON.stringify(swmlJson, null, 2));
         console.log();
       }
       break;

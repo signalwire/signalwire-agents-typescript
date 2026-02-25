@@ -1249,6 +1249,34 @@ export class AgentBase {
     return this.serve();
   }
 
+  // ── Graceful shutdown ─────────────────────────────────────────────
+
+  private static _shutdownRegistered = false;
+
+  /**
+   * Register process signal handlers for clean Kubernetes/Docker shutdown.
+   * Handles SIGTERM and SIGINT, waits for a timeout, then exits.
+   * @param opts - Optional timeout in milliseconds (default 5000).
+   */
+  static setupGracefulShutdown(opts?: { timeout?: number }): void {
+    if (AgentBase._shutdownRegistered) return;
+    AgentBase._shutdownRegistered = true;
+
+    const timeout = opts?.timeout ?? 5000;
+    const log = getLogger('GracefulShutdown');
+
+    const handler = (signal: string) => {
+      log.info(`Received ${signal}, shutting down in ${timeout}ms...`);
+      setTimeout(() => {
+        log.info('Shutdown complete.');
+        process.exit(0);
+      }, timeout);
+    };
+
+    process.on('SIGTERM', () => handler('SIGTERM'));
+    process.on('SIGINT', () => handler('SIGINT'));
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────
 
   private findSummary(body: Record<string, unknown>): Record<string, unknown> | null {

@@ -32,6 +32,17 @@ function isAgentClass(obj: unknown): boolean {
   );
 }
 
+function isSWMLServiceInstance(obj: unknown): boolean {
+  if (!obj || typeof obj !== 'object') return false;
+  const a = obj as Record<string, unknown>;
+  return (
+    typeof a['renderSwml'] === 'function' &&
+    typeof a['getApp'] === 'function' &&
+    typeof a['addVerb'] === 'function' &&
+    typeof a['defineTool'] !== 'function'
+  );
+}
+
 async function importModule(agentPath: string): Promise<Record<string, unknown>> {
   const absPath = resolve(agentPath);
   const fileUrl = pathToFileURL(absPath).href;
@@ -102,8 +113,20 @@ export async function loadAgent(agentPath: string, agentClass?: string): Promise
     }
   }
 
+  // 6. Named export `agent` as SWMLService
+  if (mod['agent'] && isSWMLServiceInstance(mod['agent'])) {
+    return mod['agent'];
+  }
+
+  // 7. Any exported SWMLService instance
+  for (const key of Object.keys(mod)) {
+    if (isSWMLServiceInstance(mod[key])) {
+      return mod[key];
+    }
+  }
+
   throw new Error(
-    `Could not find an AgentBase instance or subclass in ${resolve(agentPath)}.\n` +
+    `Could not find an AgentBase or SWMLService instance in ${resolve(agentPath)}.\n` +
     'Export your agent as `export const agent = new AgentBase(...)` or as default export.',
   );
 }
@@ -118,7 +141,7 @@ export async function listAgents(agentPath: string): Promise<string[]> {
   const agents: string[] = [];
 
   for (const key of Object.keys(mod)) {
-    if (isAgentInstance(mod[key]) || isAgentClass(mod[key])) {
+    if (isAgentInstance(mod[key]) || isAgentClass(mod[key]) || isSWMLServiceInstance(mod[key])) {
       agents.push(key);
     }
   }
