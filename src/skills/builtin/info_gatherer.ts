@@ -13,6 +13,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -51,6 +52,31 @@ export class InfoGathererSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('info_gatherer', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      fields: {
+        type: 'array',
+        description: 'Array of field definitions to collect: { name, description, required?, validation?, type? }.',
+        items: { type: 'object' },
+      },
+      purpose: {
+        type: 'string',
+        description: 'A description of why this information is being collected.',
+      },
+      confirmation_message: {
+        type: 'string',
+        description: 'Custom message returned after successful info collection.',
+        default: 'Information has been saved successfully.',
+      },
+      store_globally: {
+        type: 'boolean',
+        description: 'Whether to store gathered info in global data.',
+        default: false,
+      },
+    };
   }
 
   /** @returns Manifest with config schema for fields, purpose, confirmation_message, and store_globally. */
@@ -244,7 +270,7 @@ export class InfoGathererSkill extends SkillBase {
   }
 
   /** @returns Prompt section listing required/optional fields and collection instructions. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     const fields = this.getConfig<FieldDefinition[]>('fields', []);
     const purpose = this.getConfig<string | undefined>('purpose', undefined);
 

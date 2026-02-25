@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -28,6 +29,21 @@ export class PlayBackgroundFileSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('play_background_file', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      default_file_url: {
+        type: 'string',
+        description: 'Default audio file URL to use when no URL is specified.',
+      },
+      allowed_domains: {
+        type: 'array',
+        description: 'List of allowed domains for audio file URLs.',
+        items: { type: 'string' },
+      },
+    };
   }
 
   /** @returns Manifest with config schema for default_file_url and allowed_domains. */
@@ -149,8 +165,7 @@ export class PlayBackgroundFileSkill extends SkillBase {
     ];
   }
 
-  /** @returns Prompt section describing background audio playback capabilities. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     const defaultFileUrl = this.getConfig<string | undefined>(
       'default_file_url',
       undefined,

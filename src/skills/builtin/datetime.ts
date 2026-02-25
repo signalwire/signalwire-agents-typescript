@@ -10,6 +10,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -25,6 +26,10 @@ export class DateTimeSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('datetime', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return { ...super.getParameterSchema() };
   }
 
   /** @returns Manifest with skill metadata and tags. */
@@ -89,8 +94,7 @@ export class DateTimeSkill extends SkillBase {
     ];
   }
 
-  /** @returns Prompt section instructing the AI how to use the datetime tool. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Date and Time',

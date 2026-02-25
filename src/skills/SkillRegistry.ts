@@ -5,7 +5,7 @@
  * Supports SIGNALWIRE_SKILL_PATHS env var for custom skill directories.
  */
 
-import { SkillBase, type SkillConfig, type SkillManifest } from './SkillBase.js';
+import { SkillBase, type SkillConfig, type SkillManifest, type ParameterSchemaEntry } from './SkillBase.js';
 import { getLogger } from '../Logger.js';
 
 const log = getLogger('SkillRegistry');
@@ -21,6 +21,24 @@ interface RegistryEntry {
   factory: SkillFactory;
   /** Optional pre-loaded manifest for the skill. */
   manifest?: SkillManifest;
+}
+
+/** Combined schema information for a registered skill, including manifest and parameter schema. */
+export interface SkillSchemaInfo {
+  /** The skill's registered name. */
+  name: string;
+  /** Human-readable description of the skill. */
+  description: string;
+  /** Semantic version string. */
+  version: string;
+  /** Whether this skill supports multiple simultaneous instances. */
+  supportsMultipleInstances: boolean;
+  /** Environment variables required by the skill. */
+  requiredEnvVars: string[];
+  /** Full parameter schema with types, defaults, and constraints. */
+  parameters: Record<string, ParameterSchemaEntry>;
+  /** Optional source category for grouping (e.g., "builtin"). */
+  source?: string;
 }
 
 let _instance: SkillRegistry | null = null;
@@ -212,6 +230,65 @@ export class SkillRegistry {
       all.push(...found);
     }
     return all;
+  }
+
+  /**
+   * Get the combined schema info for a registered skill, including manifest and parameter schema.
+   * Creates a temporary instance to extract the schema.
+   * @param name - The registered skill name to query.
+   * @returns The skill's combined schema info, or undefined if not found.
+   */
+  getSkillSchema(name: string): SkillSchemaInfo | undefined {
+    const entry = this.registry.get(name);
+    if (!entry) return undefined;
+
+    try {
+      const instance = entry.factory();
+      const manifest = instance.getManifest();
+      const SkillClass = instance.constructor as typeof SkillBase;
+      const parameters = SkillClass.getParameterSchema();
+
+      return {
+        name: manifest.name,
+        description: manifest.description,
+        version: manifest.version,
+        supportsMultipleInstances: SkillClass.SUPPORTS_MULTIPLE_INSTANCES,
+        requiredEnvVars: manifest.requiredEnvVars ?? [],
+        parameters,
+        source: manifest.tags?.includes('external') ? 'external' : 'builtin',
+      };
+    } catch (err) {
+      log.warn(`Failed to get schema for skill '${name}': ${err}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Get combined schema info for all registered skills.
+   * @returns Record mapping skill names to their schema info.
+   */
+  getAllSkillsSchema(): Record<string, SkillSchemaInfo> {
+    const result: Record<string, SkillSchemaInfo> = {};
+    for (const name of this.registry.keys()) {
+      const schema = this.getSkillSchema(name);
+      if (schema) result[name] = schema;
+    }
+    return result;
+  }
+
+  /**
+   * List all registered skill names grouped by source category.
+   * @returns Record mapping source categories to arrays of skill names.
+   */
+  listAllSkillSources(): Record<string, string[]> {
+    const groups: Record<string, string[]> = {};
+    for (const name of this.registry.keys()) {
+      const schema = this.getSkillSchema(name);
+      const source = schema?.source ?? 'unknown';
+      if (!groups[source]) groups[source] = [];
+      groups[source].push(name);
+    }
+    return groups;
   }
 
   /**

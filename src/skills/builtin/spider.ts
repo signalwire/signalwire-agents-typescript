@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -42,6 +43,24 @@ type SpiderResponse = SpiderResult[] | SpiderResult | { error: string; message?:
  * selector filtering. Supports `max_content_length` config option.
  */
 export class SpiderSkill extends SkillBase {
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      api_key: {
+        type: 'string',
+        description: 'Spider API key.',
+        hidden: true,
+        env_var: 'SPIDER_API_KEY',
+        required: true,
+      },
+      max_content_length: {
+        type: 'number',
+        description: 'Maximum length of returned content in characters.',
+        default: 5000,
+      },
+    };
+  }
+
   /**
    * @param config - Optional configuration; supports `max_content_length`.
    */
@@ -204,7 +223,7 @@ export class SpiderSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing web scraping capabilities and content limits. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Web Page Scraping',

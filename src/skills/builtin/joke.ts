@@ -11,6 +11,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -96,6 +97,10 @@ export class JokeSkill extends SkillBase {
     super('joke', config);
   }
 
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return { ...super.getParameterSchema() };
+  }
+
   /** @returns Manifest with skill metadata and tags. */
   getManifest(): SkillManifest {
     return {
@@ -153,8 +158,7 @@ export class JokeSkill extends SkillBase {
     ];
   }
 
-  /** @returns Prompt section instructing the AI how to deliver jokes. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Jokes',

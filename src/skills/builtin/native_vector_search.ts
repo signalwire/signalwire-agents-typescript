@@ -13,6 +13,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -141,6 +142,33 @@ function scoreTfIdf(
  * construction time. Suitable for small to medium document collections.
  */
 export class NativeVectorSearchSkill extends SkillBase {
+  static override SUPPORTS_MULTIPLE_INSTANCES = true;
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      tool_name: {
+        type: 'string',
+        description: 'Custom tool name for this vector search instance.',
+      },
+      documents: {
+        type: 'array',
+        description: 'Array of documents to index: [{ id, text, metadata? }].',
+        items: { type: 'object' },
+      },
+      num_results: {
+        type: 'number',
+        description: 'Default number of top results to return.',
+        default: 3,
+      },
+      distance_threshold: {
+        type: 'number',
+        description: 'Minimum relevance score threshold.',
+        default: 0,
+      },
+    };
+  }
+
   private _documents: DocumentEntry[] = [];
   private _tokenizedDocs: string[][] = [];
   private _docTfs: Map<string, number>[] = [];
@@ -153,6 +181,11 @@ export class NativeVectorSearchSkill extends SkillBase {
   constructor(config?: SkillConfig) {
     super('native_vector_search', config);
     this._loadDocuments();
+  }
+
+  override getInstanceKey(): string {
+    const toolName = this.getConfig<string | undefined>('tool_name', undefined);
+    return toolName ? `${this.skillName}_${toolName}` : this.skillName;
   }
 
   /** @returns Manifest with config schema for the documents array. */
@@ -298,7 +331,7 @@ export class NativeVectorSearchSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing the local document search capabilities. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     const docCount = this._documents.length;
 
     return [

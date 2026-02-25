@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -48,6 +49,25 @@ export class WeatherApiSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('weather_api', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      api_key: {
+        type: 'string',
+        description: 'OpenWeatherMap API key.',
+        hidden: true,
+        env_var: 'WEATHER_API_KEY',
+        required: true,
+      },
+      units: {
+        type: 'string',
+        description: 'Temperature units: "metric" (Celsius), "imperial" (Fahrenheit), or "standard" (Kelvin).',
+        default: 'metric',
+        enum: ['metric', 'imperial', 'standard'],
+      },
+    };
   }
 
   /** @returns Manifest declaring WEATHER_API_KEY as required and config schema for units. */
@@ -157,8 +177,7 @@ export class WeatherApiSkill extends SkillBase {
     ];
   }
 
-  /** @returns Prompt section describing weather lookup capabilities and configured units. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     const units = this.getConfig<string>('units', 'metric');
     const unitDesc =
       units === 'imperial'

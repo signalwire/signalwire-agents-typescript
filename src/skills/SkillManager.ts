@@ -5,10 +5,20 @@
  * skill tools, hints, global data, and prompt sections.
  */
 
-import { SkillBase } from './SkillBase.js';
+import { SkillBase, type SkillConfig } from './SkillBase.js';
 import { getLogger } from '../Logger.js';
 
 const log = getLogger('SkillManager');
+
+/** Stored metadata for a loaded skill, enabling ephemeral copy re-instantiation. */
+interface SkillMetaEntry {
+  /** The skill class constructor. */
+  SkillClass: typeof SkillBase;
+  /** The config originally passed to the skill. */
+  config: SkillConfig;
+  /** The skill name. */
+  skillName: string;
+}
 
 /**
  * Manages the lifecycle of skills attached to an agent.
@@ -18,16 +28,25 @@ const log = getLogger('SkillManager');
  */
 export class SkillManager {
   private skills: Map<string, SkillBase> = new Map();
+  private skillMeta: Map<string, SkillMetaEntry> = new Map();
 
   /**
    * Add a skill to the manager, validating env vars and calling setup().
+   * Uses the skill's instance key for deduplication.
    * @param skill - The skill instance to add.
    */
   async addSkill(skill: SkillBase): Promise<void> {
     const name = skill.skillName;
+    const instanceKey = skill.getInstanceKey();
+    const SkillClass = skill.constructor as typeof SkillBase;
 
-    if (this.skills.has(skill.instanceId)) {
-      throw new Error(`Skill instance '${skill.instanceId}' is already loaded`);
+    // Duplicate detection using instance key
+    if (this.skills.has(instanceKey)) {
+      if (!SkillClass.SUPPORTS_MULTIPLE_INSTANCES) {
+        throw new Error(`Skill '${name}' is already loaded and does not support multiple instances`);
+      }
+      log.warn(`Skill '${name}' with key '${instanceKey}' already loaded, skipping duplicate`);
+      return;
     }
 
     // Validate required env vars
@@ -36,26 +55,52 @@ export class SkillManager {
       log.warn(`Skill '${name}' missing env vars: ${missingEnvVars.join(', ')}`);
     }
 
+    // Log parameter schema info (non-fatal)
+    const schema = SkillClass.getParameterSchema();
+    if (schema && Object.keys(schema).length > 0) {
+      log.debug(`Skill '${name}' has ${Object.keys(schema).length} config params`);
+    }
+
     // Setup
     await skill.setup();
     skill.markInitialized();
 
-    this.skills.set(skill.instanceId, skill);
-    log.debug(`Added skill '${name}' (${skill.instanceId})`);
+    this.skills.set(instanceKey, skill);
+    this.skillMeta.set(instanceKey, {
+      SkillClass,
+      config: { ...skill['config'] },
+      skillName: name,
+    });
+    log.debug(`Added skill '${name}' (key: ${instanceKey})`);
   }
 
   /**
-   * Remove a skill by its instance ID, calling cleanup() before removal.
-   * @param instanceId - The unique instance ID of the skill to remove.
+   * Remove a skill by its instance key or instance ID, calling cleanup() before removal.
+   * @param keyOrId - The instance key or instance ID of the skill to remove.
    * @returns True if the skill was found and removed, false otherwise.
    */
-  async removeSkill(instanceId: string): Promise<boolean> {
-    const skill = this.skills.get(instanceId);
+  async removeSkill(keyOrId: string): Promise<boolean> {
+    // Try by instance key first
+    let skill = this.skills.get(keyOrId);
+    let key = keyOrId;
+
+    // Fallback: search by instanceId for backward compatibility
+    if (!skill) {
+      for (const [k, s] of this.skills) {
+        if (s.instanceId === keyOrId) {
+          skill = s;
+          key = k;
+          break;
+        }
+      }
+    }
+
     if (!skill) return false;
 
     await skill.cleanup();
-    this.skills.delete(instanceId);
-    log.debug(`Removed skill '${skill.skillName}' (${instanceId})`);
+    this.skills.delete(key);
+    this.skillMeta.delete(key);
+    log.debug(`Removed skill '${skill.skillName}' (${key})`);
     return true;
   }
 
@@ -66,10 +111,11 @@ export class SkillManager {
    */
   async removeSkillByName(skillName: string): Promise<number> {
     let count = 0;
-    for (const [id, skill] of this.skills) {
+    for (const [key, skill] of this.skills) {
       if (skill.skillName === skillName) {
         await skill.cleanup();
-        this.skills.delete(id);
+        this.skills.delete(key);
+        this.skillMeta.delete(key);
         count++;
       }
     }
@@ -89,12 +135,18 @@ export class SkillManager {
   }
 
   /**
-   * Get a skill by its unique instance ID.
-   * @param instanceId - The instance ID to look up.
+   * Get a skill by its instance key or instance ID.
+   * @param keyOrId - The instance key or instance ID to look up.
    * @returns The skill instance, or undefined if not found.
    */
-  getSkill(instanceId: string): SkillBase | undefined {
-    return this.skills.get(instanceId);
+  getSkill(keyOrId: string): SkillBase | undefined {
+    const skill = this.skills.get(keyOrId);
+    if (skill) return skill;
+    // Fallback: search by instanceId
+    for (const s of this.skills.values()) {
+      if (s.instanceId === keyOrId) return s;
+    }
+    return undefined;
   }
 
   /**
@@ -166,6 +218,18 @@ export class SkillManager {
   }
 
   /**
+   * Get metadata for all loaded skills, enabling ephemeral copy re-instantiation.
+   * @returns Array of entries containing skill name, class constructor, and config.
+   */
+  getLoadedSkillEntries(): Array<{ skillName: string; SkillClass: typeof SkillBase; config: SkillConfig }> {
+    return Array.from(this.skillMeta.values()).map(entry => ({
+      skillName: entry.skillName,
+      SkillClass: entry.SkillClass,
+      config: { ...entry.config },
+    }));
+  }
+
+  /**
    * Remove all skills and clean up.
    */
   async clear(): Promise<void> {
@@ -173,5 +237,6 @@ export class SkillManager {
       await skill.cleanup();
     }
     this.skills.clear();
+    this.skillMeta.clear();
   }
 }

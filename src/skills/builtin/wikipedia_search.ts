@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -67,6 +68,27 @@ export class WikipediaSearchSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('wikipedia_search', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      language: {
+        type: 'string',
+        description: 'Wikipedia language edition to search (e.g., "en", "fr", "de").',
+        default: 'en',
+      },
+      max_results: {
+        type: 'number',
+        description: 'Maximum number of search results to consider.',
+        default: 1,
+      },
+      max_content_length: {
+        type: 'number',
+        description: 'Maximum length of returned content in characters.',
+        default: 5000,
+      },
+    };
   }
 
   /** @returns Manifest with skill metadata (no required env vars). */
@@ -221,7 +243,7 @@ export class WikipediaSearchSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing Wikipedia search capabilities and usage guidance. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Wikipedia Search',

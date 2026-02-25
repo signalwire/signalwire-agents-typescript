@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -61,6 +62,39 @@ export class WebSearchSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('web_search', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      api_key: {
+        type: 'string',
+        description: 'Google Custom Search API key.',
+        hidden: true,
+        env_var: 'GOOGLE_SEARCH_API_KEY',
+        required: true,
+      },
+      search_engine_id: {
+        type: 'string',
+        description: 'Google Custom Search Engine ID (CX).',
+        hidden: true,
+        env_var: 'GOOGLE_SEARCH_CX',
+        required: true,
+      },
+      max_results: {
+        type: 'number',
+        description: 'Maximum number of results to return (1-10).',
+        default: 5,
+        min: 1,
+        max: 10,
+      },
+      safe_search: {
+        type: 'string',
+        description: 'Safe search level.',
+        default: 'medium',
+        enum: ['off', 'medium', 'high'],
+      },
+    };
   }
 
   /** @returns Manifest declaring GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX as required. */
@@ -185,7 +219,7 @@ export class WebSearchSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing web search capabilities and usage guidance. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Web Search',

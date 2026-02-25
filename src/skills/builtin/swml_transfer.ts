@@ -13,6 +13,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -40,6 +41,26 @@ export class SwmlTransferSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('swml_transfer', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      patterns: {
+        type: 'array',
+        description: 'Array of named transfer patterns: { name, destination, description? }.',
+        items: { type: 'object', properties: { name: { type: 'string' }, destination: { type: 'string' }, description: { type: 'string' } } },
+      },
+      allow_arbitrary: {
+        type: 'boolean',
+        description: 'Whether to allow transfers to arbitrary destinations not in patterns list.',
+      },
+      default_message: {
+        type: 'string',
+        description: 'Default message to say before transferring.',
+        default: 'Transferring your call now.',
+      },
+    };
   }
 
   /** @returns Manifest with config schema for patterns, allow_arbitrary, and default_message. */
@@ -186,8 +207,7 @@ export class SwmlTransferSkill extends SkillBase {
     return tools;
   }
 
-  /** @returns Prompt section describing call transfer capabilities and available destinations. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     const patterns = this.getConfig<TransferPattern[]>('patterns', []);
     const allowArbitrary = this.getConfig<boolean | undefined>(
       'allow_arbitrary',

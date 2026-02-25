@@ -26,6 +26,10 @@ await agent.addSkill(new MathSkill());
 // List what skills are loaded
 console.log('Loaded skills:', agent.listSkills().map(s => s.name));
 
+// Query parameter schemas programmatically
+console.log('DateTimeSkill parameters:', DateTimeSkill.getParameterSchema());
+console.log('MathSkill parameters:', MathSkill.getParameterSchema());
+
 agent.addLanguage({ name: 'English', code: 'en-US', voice: 'rachel' });
 
 agent.run();

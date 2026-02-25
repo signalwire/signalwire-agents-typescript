@@ -13,6 +13,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -24,6 +25,25 @@ import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
  * a non-functional `mcp_invoke` tool that returns a "not yet implemented" message.
  */
 export class McpGatewaySkill extends SkillBase {
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      gateway_url: {
+        type: 'string',
+        description: 'URL of the MCP gateway server.',
+      },
+      tool_prefix: {
+        type: 'string',
+        description: 'Prefix for tool names from this gateway.',
+      },
+      auth_token: {
+        type: 'string',
+        description: 'Authentication token for the MCP gateway.',
+        hidden: true,
+      },
+    };
+  }
+
   /**
    * @param config - Optional configuration (reserved for future MCP server settings).
    */
@@ -74,7 +94,7 @@ export class McpGatewaySkill extends SkillBase {
   }
 
   /** @returns Prompt section explaining the MCP gateway placeholder status. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'MCP Gateway (Placeholder)',

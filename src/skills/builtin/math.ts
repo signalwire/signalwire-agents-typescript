@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -73,6 +74,10 @@ export class MathSkill extends SkillBase {
     super('math', config);
   }
 
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return { ...super.getParameterSchema() };
+  }
+
   /** @returns Manifest with skill metadata and tags. */
   getManifest(): SkillManifest {
     return {
@@ -123,8 +128,7 @@ export class MathSkill extends SkillBase {
     ];
   }
 
-  /** @returns Prompt section instructing the AI how to use the calculate tool. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Mathematical Calculations',

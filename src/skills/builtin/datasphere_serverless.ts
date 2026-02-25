@@ -13,6 +13,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 import { DataMap } from '../../DataMap.js';
@@ -27,11 +28,60 @@ import { DataMap } from '../../DataMap.js';
  * and `document_id` config options.
  */
 export class DataSphereServerlessSkill extends SkillBase {
+  static override SUPPORTS_MULTIPLE_INSTANCES = true;
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      tool_name: {
+        type: 'string',
+        description: 'Custom tool name for this DataSphere Serverless instance.',
+      },
+      space_name: {
+        type: 'string',
+        description: 'SignalWire space name.',
+        env_var: 'SIGNALWIRE_SPACE',
+      },
+      project_id: {
+        type: 'string',
+        description: 'SignalWire project ID.',
+        env_var: 'SIGNALWIRE_PROJECT_ID',
+      },
+      token: {
+        type: 'string',
+        description: 'SignalWire auth token.',
+        hidden: true,
+        env_var: 'SIGNALWIRE_TOKEN',
+      },
+      document_id: {
+        type: 'string',
+        description: 'Optional: restrict search to a specific document ID.',
+      },
+      max_results: {
+        type: 'number',
+        description: 'Maximum number of results to return.',
+        default: 5,
+      },
+      distance_threshold: {
+        type: 'number',
+        description: 'Maximum distance threshold for results (0-1).',
+        default: 0.7,
+        min: 0,
+        max: 1,
+      },
+    };
+  }
+
   /**
    * @param config - Optional configuration; supports `max_results`, `distance_threshold`, `document_id`.
    */
   constructor(config?: SkillConfig) {
     super('datasphere_serverless', config);
+  }
+
+  override getInstanceKey(): string {
+    const toolName = this.getConfig<string | undefined>('tool_name', undefined);
+    return toolName ? `${this.skillName}_${toolName}` : this.skillName;
   }
 
   /** @returns Manifest declaring SignalWire credentials as required env vars. */
@@ -167,7 +217,7 @@ export class DataSphereServerlessSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing serverless DataSphere search capabilities. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Knowledge Base Search (DataSphere - Serverless)',

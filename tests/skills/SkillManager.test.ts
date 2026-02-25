@@ -45,6 +45,15 @@ class MockSkill extends SkillBase {
   }
 }
 
+/** Multi-instance mock skill that uses instanceId to allow duplicates. */
+class MultiMockSkill extends MockSkill {
+  static override SUPPORTS_MULTIPLE_INSTANCES = true;
+
+  override getInstanceKey(): string {
+    return this.instanceId; // Each instance gets a unique key
+  }
+}
+
 describe('SkillManager', () => {
   let manager: SkillManager;
 
@@ -81,8 +90,8 @@ describe('SkillManager', () => {
   });
 
   it('removes skills by name', async () => {
-    const s1 = new MockSkill('weather');
-    const s2 = new MockSkill('weather');
+    const s1 = new MultiMockSkill('weather');
+    const s2 = new MultiMockSkill('weather');
     const s3 = new MockSkill('math');
     await manager.addSkill(s1);
     await manager.addSkill(s2);
@@ -154,8 +163,8 @@ describe('SkillManager', () => {
   });
 
   it('supports multi-instance of same skill', async () => {
-    const s1 = new MockSkill('weather');
-    const s2 = new MockSkill('weather');
+    const s1 = new MultiMockSkill('weather');
+    const s2 = new MultiMockSkill('weather');
     await manager.addSkill(s1);
     await manager.addSkill(s2);
     expect(manager.size).toBe(2);

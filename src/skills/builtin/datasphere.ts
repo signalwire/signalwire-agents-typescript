@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -47,11 +48,60 @@ interface DataSphereResponse {
  * `distance_threshold` config options.
  */
 export class DataSphereSkill extends SkillBase {
+  static override SUPPORTS_MULTIPLE_INSTANCES = true;
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      tool_name: {
+        type: 'string',
+        description: 'Custom tool name for this DataSphere instance.',
+      },
+      space_name: {
+        type: 'string',
+        description: 'SignalWire space name.',
+        env_var: 'SIGNALWIRE_SPACE',
+      },
+      project_id: {
+        type: 'string',
+        description: 'SignalWire project ID.',
+        env_var: 'SIGNALWIRE_PROJECT_ID',
+      },
+      token: {
+        type: 'string',
+        description: 'SignalWire auth token.',
+        hidden: true,
+        env_var: 'SIGNALWIRE_TOKEN',
+      },
+      document_id: {
+        type: 'string',
+        description: 'Optional: restrict search to a specific document ID.',
+      },
+      max_results: {
+        type: 'number',
+        description: 'Maximum number of results to return.',
+        default: 5,
+      },
+      distance_threshold: {
+        type: 'number',
+        description: 'Maximum distance threshold for results (0-1).',
+        default: 0.7,
+        min: 0,
+        max: 1,
+      },
+    };
+  }
+
   /**
    * @param config - Optional configuration; supports `max_results` and `distance_threshold`.
    */
   constructor(config?: SkillConfig) {
     super('datasphere', config);
+  }
+
+  override getInstanceKey(): string {
+    const toolName = this.getConfig<string | undefined>('tool_name', undefined);
+    return toolName ? `${this.skillName}_${toolName}` : this.skillName;
   }
 
   /** @returns Manifest declaring SignalWire credentials as required env vars. */
@@ -198,7 +248,7 @@ export class DataSphereSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing DataSphere knowledge base search capabilities. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Knowledge Base Search (DataSphere)',

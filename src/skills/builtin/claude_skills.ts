@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -71,6 +72,29 @@ interface AnthropicErrorResponse {
  * is used and the maximum response length.
  */
 export class ClaudeSkill extends SkillBase {
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      api_key: {
+        type: 'string',
+        description: 'Anthropic API key.',
+        hidden: true,
+        env_var: 'ANTHROPIC_API_KEY',
+        required: true,
+      },
+      model: {
+        type: 'string',
+        description: 'The Claude model to use.',
+        default: 'claude-sonnet-4-5-20250929',
+      },
+      max_tokens: {
+        type: 'number',
+        description: 'Maximum tokens in the response.',
+        default: 1024,
+      },
+    };
+  }
+
   /**
    * @param config - Optional configuration; supports `model` and `max_tokens`.
    */
@@ -212,7 +236,7 @@ export class ClaudeSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing Claude AI delegation capabilities. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     return [
       {
         title: 'Claude AI Assistant',

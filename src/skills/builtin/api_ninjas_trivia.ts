@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -54,6 +55,28 @@ export class ApiNinjasTriviaSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('api_ninjas_trivia', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      api_key: {
+        type: 'string',
+        description: 'API Ninjas API key.',
+        hidden: true,
+        env_var: 'API_NINJAS_KEY',
+        required: true,
+      },
+      default_category: {
+        type: 'string',
+        description: 'Default trivia category if none is specified.',
+      },
+      reveal_answer: {
+        type: 'boolean',
+        description: 'Whether to include the answer in the response.',
+        default: false,
+      },
+    };
   }
 
   /** @returns Manifest declaring API_NINJAS_KEY as required and config schema for category/reveal. */
@@ -181,7 +204,7 @@ export class ApiNinjasTriviaSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing trivia capabilities and quiz behavior. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     const revealAnswer = this.getConfig<boolean>('reveal_answer', false);
 
     const bullets: string[] = [

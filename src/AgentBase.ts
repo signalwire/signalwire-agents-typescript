@@ -633,9 +633,15 @@ export class AgentBase {
   async addSkill(skill: SkillBase): Promise<this> {
     await this.skillManager.addSkill(skill);
 
-    // Register skill tools
+    // Register skill tools, then apply any swaigFields as extraFields on the SWAIG function
     for (const toolDef of skill.getTools()) {
       this.defineTool(toolDef);
+      if (Object.keys(skill.swaigFields).length > 0) {
+        const fn = this.toolRegistry.get(toolDef.name);
+        if (fn instanceof SwaigFunction) {
+          Object.assign(fn.extraFields, skill.swaigFields);
+        }
+      }
     }
 
     // Inject prompt sections
@@ -1039,6 +1045,37 @@ export class AgentBase {
     copy.postAnswerVerbs = [...this.postAnswerVerbs];
     copy.postAiVerbs = [...this.postAiVerbs];
     copy.swmlBuilder = new SwmlBuilder();
+
+    // Replay skills into the ephemeral copy so dynamic config callbacks can modify them
+    copy.skillManager = new SkillManager();
+    for (const entry of this.skillManager.getLoadedSkillEntries()) {
+      try {
+        const skill = new (entry.SkillClass as any)(entry.config);
+        // Synchronous re-add: mark initialized, register tools/prompts/hints/data
+        skill.markInitialized();
+        copy.skillManager.addSkill(skill).catch(() => { /* swallow async errors in sync context */ });
+
+        for (const toolDef of skill.getTools()) {
+          copy.defineTool(toolDef);
+          if (Object.keys(skill.swaigFields).length > 0) {
+            const fn = copy.toolRegistry.get(toolDef.name);
+            if (fn instanceof SwaigFunction) {
+              Object.assign(fn.extraFields, skill.swaigFields);
+            }
+          }
+        }
+        for (const section of skill.getPromptSections()) {
+          copy.promptAddSection(section.title, section);
+        }
+        const hints = skill.getHints();
+        if (hints.length) copy.addHints(hints);
+        const globalData = skill.getGlobalData();
+        if (Object.keys(globalData).length) copy.updateGlobalData(globalData);
+      } catch (e) {
+        this.log.warn(`Failed to replay skill '${entry.skillName}' in ephemeral copy: ${e}`);
+      }
+    }
+
     return copy;
   }
 

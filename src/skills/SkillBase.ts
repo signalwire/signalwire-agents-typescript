@@ -7,6 +7,7 @@
 
 import { randomBytes } from 'node:crypto';
 import type { SwaigHandler } from '../SwaigFunction.js';
+import type { SwaigFunctionResult } from '../SwaigFunctionResult.js';
 
 /** Configuration key-value pairs passed to a skill at construction time. */
 export interface SkillConfig {
@@ -43,6 +44,30 @@ export interface SkillPromptSection {
   numbered?: boolean;
 }
 
+/** Schema entry describing a single skill configuration parameter. */
+export interface ParameterSchemaEntry {
+  /** JSON Schema type of the parameter value. */
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array';
+  /** Human-readable description of the parameter. */
+  description: string;
+  /** Default value used when the parameter is not provided. */
+  default?: unknown;
+  /** Whether the parameter must be supplied. */
+  required?: boolean;
+  /** Whether the parameter should be hidden from user-facing output (e.g., API keys). */
+  hidden?: boolean;
+  /** Environment variable that can supply this parameter's value. */
+  env_var?: string;
+  /** Allowed values for the parameter. */
+  enum?: unknown[];
+  /** Minimum value (for numeric types). */
+  min?: number;
+  /** Maximum value (for numeric types). */
+  max?: number;
+  /** Item schema for array-type parameters. */
+  items?: Record<string, unknown>;
+}
+
 /** Metadata describing a skill's identity, requirements, and configuration schema. */
 export interface SkillManifest {
   /** Unique skill name used for registration and lookup. */
@@ -70,12 +95,36 @@ export interface SkillManifest {
  * They define tools, prompt sections, hints, and global data.
  */
 export abstract class SkillBase {
+  /** Whether this skill type supports multiple simultaneous instances (e.g., with different tool_name). */
+  static SUPPORTS_MULTIPLE_INSTANCES = false;
+
+  /**
+   * Get the parameter schema for this skill class, describing all accepted configuration options.
+   * Subclasses should override and call `super.getParameterSchema()` to include base parameters.
+   * @returns Record mapping parameter names to their schema entries.
+   */
+  static getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      swaig_fields: {
+        type: 'object',
+        description: 'Additional SWAIG fields to merge into each tool definition provided by this skill.',
+      },
+      skip_prompt: {
+        type: 'boolean',
+        description: 'When true, suppress all prompt sections from this skill.',
+        default: false,
+      },
+    };
+  }
+
   /** The registered name of this skill type. */
   readonly skillName: string;
   /** Unique identifier for this skill instance (includes timestamp and random bytes). */
   readonly instanceId: string;
   /** Configuration options provided at construction time. */
   protected config: SkillConfig;
+  /** Additional SWAIG fields extracted from config, merged into tool definitions. */
+  readonly swaigFields: Record<string, unknown>;
   private _initialized = false;
 
   /**
@@ -85,8 +134,12 @@ export abstract class SkillBase {
    */
   constructor(skillName: string, config?: SkillConfig) {
     this.skillName = skillName;
-    this.config = config ?? {};
+    this.config = { ...(config ?? {}) };
     this.instanceId = `${skillName}-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
+
+    // Extract swaig_fields from config (matches Python's self.swaig_fields = self.params.pop('swaig_fields', {}))
+    this.swaigFields = (this.config['swaig_fields'] as Record<string, unknown>) ?? {};
+    delete this.config['swaig_fields'];
   }
 
   /**
@@ -111,9 +164,23 @@ export abstract class SkillBase {
 
   /**
    * Get prompt sections to inject into the agent's system prompt.
+   * Respects the `skip_prompt` config option — returns `[]` if set to `true`.
+   * Subclasses should override `_getPromptSections()` instead of this method.
    * @returns Array of prompt sections with titles, bodies, and bullets.
    */
   getPromptSections(): SkillPromptSection[] {
+    if (this.config['skip_prompt'] === true) {
+      return [];
+    }
+    return this._getPromptSections();
+  }
+
+  /**
+   * Internal method returning this skill's prompt sections.
+   * Override this in subclasses instead of `getPromptSections()`.
+   * @returns Array of prompt sections with titles, bodies, and bullets.
+   */
+  protected _getPromptSections(): SkillPromptSection[] {
     return [];
   }
 
@@ -131,6 +198,46 @@ export abstract class SkillBase {
    */
   getGlobalData(): Record<string, unknown> {
     return {};
+  }
+
+  /**
+   * Get the instance key used for deduplication in the SkillManager.
+   * Default returns the skill name. Multi-instance skills should override
+   * to include a distinguishing suffix (e.g., tool_name).
+   * @returns A unique key identifying this skill instance.
+   */
+  getInstanceKey(): string {
+    return this.skillName;
+  }
+
+  /**
+   * Get the namespaced key for storing per-skill data in global_data.
+   * @returns A string like "skill:datetime" or "skill:my_prefix".
+   */
+  getSkillNamespace(): string {
+    const prefix = this.config['prefix'] as string | undefined;
+    return `skill:${prefix ?? this.getInstanceKey()}`;
+  }
+
+  /**
+   * Read this skill's data from a raw call data object's global_data.
+   * @param rawData - The raw request data containing global_data.
+   * @returns The skill's stored data, or an empty object if not found.
+   */
+  getSkillData(rawData: Record<string, unknown>): Record<string, unknown> {
+    const globalData = rawData['global_data'] as Record<string, unknown> | undefined;
+    if (!globalData) return {};
+    return (globalData[this.getSkillNamespace()] as Record<string, unknown>) ?? {};
+  }
+
+  /**
+   * Update this skill's namespaced data on a SwaigFunctionResult via updateGlobalData.
+   * @param result - The SwaigFunctionResult to update.
+   * @param data - The data to store under this skill's namespace.
+   * @returns The SwaigFunctionResult for chaining.
+   */
+  updateSkillData(result: SwaigFunctionResult, data: Record<string, unknown>): SwaigFunctionResult {
+    return result.updateGlobalData({ [this.getSkillNamespace()]: data });
   }
 
   /**

@@ -16,6 +16,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -79,6 +80,26 @@ export class CustomSkillsSkill extends SkillBase {
   constructor(config?: SkillConfig) {
     super('custom_skills', config);
     this._compileHandlers();
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      tools: {
+        type: 'array',
+        description: 'Array of custom tool definitions: { name, description, handler_code, parameters?, required?, prompt_description?, secure?, fillers? }.',
+        items: { type: 'object' },
+      },
+      prompt_title: {
+        type: 'string',
+        description: 'Custom title for the prompt section.',
+        default: 'Custom Tools',
+      },
+      prompt_body: {
+        type: 'string',
+        description: 'Custom body text for the prompt section.',
+      },
+    };
   }
 
   /** @returns Manifest with config schema describing the tools array format. */
@@ -249,7 +270,7 @@ export class CustomSkillsSkill extends SkillBase {
   }
 
   /** @returns Prompt section listing all custom tools and their descriptions. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     const toolDefs = this._getToolDefs();
     const configData = this.config as unknown as CustomSkillsConfigData;
 

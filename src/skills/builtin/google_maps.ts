@@ -12,6 +12,7 @@ import type {
   SkillToolDefinition,
   SkillPromptSection,
   SkillConfig,
+  ParameterSchemaEntry,
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
@@ -75,6 +76,25 @@ export class GoogleMapsSkill extends SkillBase {
    */
   constructor(config?: SkillConfig) {
     super('google_maps', config);
+  }
+
+  static override getParameterSchema(): Record<string, ParameterSchemaEntry> {
+    return {
+      ...super.getParameterSchema(),
+      api_key: {
+        type: 'string',
+        description: 'Google Maps API key.',
+        hidden: true,
+        env_var: 'GOOGLE_MAPS_API_KEY',
+        required: true,
+      },
+      default_mode: {
+        type: 'string',
+        description: 'Default travel mode.',
+        default: 'driving',
+        enum: ['driving', 'walking', 'bicycling', 'transit'],
+      },
+    };
   }
 
   /** @returns Manifest declaring GOOGLE_MAPS_API_KEY as required and config schema for default_mode. */
@@ -317,7 +337,7 @@ export class GoogleMapsSkill extends SkillBase {
   }
 
   /** @returns Prompt section describing directions and place search capabilities. */
-  getPromptSections(): SkillPromptSection[] {
+  protected override _getPromptSections(): SkillPromptSection[] {
     const defaultMode = this.getConfig<string>('default_mode', 'driving');
 
     return [
