@@ -7,14 +7,15 @@
 
 import { timingSafeEqual, randomBytes } from 'node:crypto';
 
+/** Configuration for one or more authentication methods checked by {@link AuthHandler}. */
 export interface AuthConfig {
-  /** Bearer token for Authorization: Bearer <token> */
+  /** Bearer token matched against the Authorization header. */
   bearerToken?: string;
-  /** API key for X-Api-Key header */
+  /** API key matched against the X-Api-Key header. */
   apiKey?: string;
-  /** Basic auth credentials [username, password] */
+  /** Basic auth credentials as a [username, password] tuple. */
   basicAuth?: [string, string];
-  /** Custom auth validator (return true to allow) */
+  /** Custom validator function; return true to allow the request. */
   customValidator?: (request: { headers: Record<string, string>; method: string; url: string }) => boolean | Promise<boolean>;
 }
 
@@ -31,17 +32,22 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
+/** Multi-method authentication handler with timing-safe credential comparison. */
 export class AuthHandler {
   private config: AuthConfig;
 
+  /**
+   * Create a new AuthHandler.
+   * @param config - Authentication configuration specifying one or more auth methods.
+   */
   constructor(config: AuthConfig) {
     this.config = config;
   }
 
   /**
-   * Validate a request against configured auth methods.
-   * Checks in order: Bearer > API Key > Basic > Custom.
-   * Returns true if any method passes.
+   * Validate request headers against configured auth methods (Bearer, API Key, Basic, Custom) in order.
+   * @param headers - The request headers as a string-keyed record.
+   * @returns True if any configured method accepts the request, or if no methods are configured.
    */
   async validate(headers: Record<string, string>): Promise<boolean> {
     // 1. Bearer token
@@ -93,7 +99,8 @@ export class AuthHandler {
   }
 
   /**
-   * Create Hono-compatible middleware function.
+   * Create a Hono-compatible middleware that rejects unauthorized requests with a 401 response.
+   * @returns A middleware function suitable for use with Hono's `app.use()`.
    */
   middleware(): (c: any, next: () => Promise<void>) => Promise<Response | void> {
     return async (c: any, next: () => Promise<void>) => {
@@ -108,17 +115,26 @@ export class AuthHandler {
     };
   }
 
-  /** Check if Bearer token auth is configured */
+  /**
+   * Check whether Bearer token authentication is configured.
+   * @returns True if a bearer token has been set.
+   */
   hasBearerAuth(): boolean {
     return !!this.config.bearerToken;
   }
 
-  /** Check if API key auth is configured */
+  /**
+   * Check whether API key authentication is configured.
+   * @returns True if an API key has been set.
+   */
   hasApiKeyAuth(): boolean {
     return !!this.config.apiKey;
   }
 
-  /** Check if Basic auth is configured */
+  /**
+   * Check whether Basic authentication is configured.
+   * @returns True if basic auth credentials have been set.
+   */
   hasBasicAuth(): boolean {
     return !!this.config.basicAuth;
   }

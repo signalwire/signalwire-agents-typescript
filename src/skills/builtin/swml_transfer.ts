@@ -16,17 +16,33 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** A named transfer destination pattern with a friendly name and underlying address. */
 interface TransferPattern {
+  /** Friendly name for the destination (used by the AI to refer to it). */
   name: string;
+  /** SIP URI, phone number, or agent URL to transfer to. */
   destination: string;
+  /** Optional human-readable description of this destination. */
   description?: string;
 }
 
+/**
+ * Transfers calls using SWML transfer actions.
+ *
+ * Tier 2 built-in skill with no external dependencies. Supports both direct
+ * destination transfers and named pattern-based transfers configured via the
+ * `patterns` config array. Optionally restricts to named destinations only
+ * via `allow_arbitrary`.
+ */
 export class SwmlTransferSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `patterns`, `allow_arbitrary`, `default_message`.
+   */
   constructor(config?: SkillConfig) {
     super('swml_transfer', config);
   }
 
+  /** @returns Manifest with config schema for patterns, allow_arbitrary, and default_message. */
   getManifest(): SkillManifest {
     return {
       name: 'swml_transfer',
@@ -64,6 +80,7 @@ export class SwmlTransferSkill extends SkillBase {
     };
   }
 
+  /** @returns A `transfer_call` tool, plus `list_transfer_destinations` when patterns are configured. */
   getTools(): SkillToolDefinition[] {
     const patterns = this.getConfig<TransferPattern[]>('patterns', []);
     const defaultMessage = this.getConfig<string>(
@@ -169,6 +186,7 @@ export class SwmlTransferSkill extends SkillBase {
     return tools;
   }
 
+  /** @returns Prompt section describing call transfer capabilities and available destinations. */
   getPromptSections(): SkillPromptSection[] {
     const patterns = this.getConfig<TransferPattern[]>('patterns', []);
     const allowArbitrary = this.getConfig<boolean | undefined>(
@@ -259,6 +277,8 @@ export class SwmlTransferSkill extends SkillBase {
 
 /**
  * Factory function for creating SwmlTransferSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new SwmlTransferSkill instance.
  */
 export function createSkill(config?: SkillConfig): SwmlTransferSkill {
   return new SwmlTransferSkill(config);

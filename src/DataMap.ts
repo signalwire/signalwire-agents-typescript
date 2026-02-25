@@ -28,7 +28,14 @@ function expandEnvInObject(obj: unknown): unknown {
   return obj;
 }
 
+/**
+ * Fluent builder for SWAIG data_map configurations.
+ *
+ * Creates server-side tool definitions that execute on SignalWire
+ * without requiring webhook endpoints.
+ */
 export class DataMap {
+  /** The name of the SWAIG function this data map defines. */
   functionName: string;
   private _purpose = '';
   private _parameters: Record<string, unknown> = {};
@@ -38,25 +45,50 @@ export class DataMap {
   private _errorKeys: string[] = [];
   private _expandEnv = false;
 
+  /**
+   * @param functionName - The unique name for this data map tool.
+   */
   constructor(functionName: string) {
     this.functionName = functionName;
   }
 
-  /** Enable ${ENV.*} variable expansion in URLs, bodies, and outputs */
+  /**
+   * Enable `${ENV.*}` variable expansion in URLs, bodies, and outputs.
+   * @param enabled - Whether to enable expansion (defaults to true).
+   * @returns This instance for chaining.
+   */
   enableEnvExpansion(enabled = true): this {
     this._expandEnv = enabled;
     return this;
   }
 
+  /**
+   * Set the purpose (description) of this data map tool shown to the AI.
+   * @param description - A human-readable description of the tool.
+   * @returns This instance for chaining.
+   */
   purpose(description: string): this {
     this._purpose = description;
     return this;
   }
 
+  /**
+   * Alias for {@link purpose}; sets the tool description.
+   * @param description - A human-readable description of the tool.
+   * @returns This instance for chaining.
+   */
   description(description: string): this {
     return this.purpose(description);
   }
 
+  /**
+   * Define a parameter for this data map tool.
+   * @param name - The parameter name.
+   * @param paramType - The JSON Schema type (e.g., "string", "number").
+   * @param description - A description of the parameter shown to the AI.
+   * @param opts - Optional flags for required and enum constraints.
+   * @returns This instance for chaining.
+   */
   parameter(
     name: string,
     paramType: string,
@@ -77,6 +109,14 @@ export class DataMap {
     return this;
   }
 
+  /**
+   * Add a pattern-matching expression that evaluates a test value against a regex.
+   * @param testValue - The string or template variable to test.
+   * @param pattern - A regex pattern (string or RegExp) to match against.
+   * @param output - The result to return when the pattern matches.
+   * @param nomatchOutput - Optional result to return when the pattern does not match.
+   * @returns This instance for chaining.
+   */
   expression(
     testValue: string,
     pattern: string | RegExp,
@@ -96,6 +136,13 @@ export class DataMap {
     return this;
   }
 
+  /**
+   * Add a webhook that is called when this data map tool is invoked.
+   * @param method - HTTP method (e.g., "GET", "POST").
+   * @param url - The webhook URL to call.
+   * @param opts - Optional headers, form parameter name, and argument settings.
+   * @returns This instance for chaining.
+   */
   webhook(
     method: string,
     url: string,
@@ -115,24 +162,44 @@ export class DataMap {
     return this;
   }
 
+  /**
+   * Set pattern-matching expressions on the most recently added webhook.
+   * @param expressions - Array of expression objects to evaluate against the webhook response.
+   * @returns This instance for chaining.
+   */
   webhookExpressions(expressions: Record<string, unknown>[]): this {
     if (!this._webhooks.length) throw new Error('Must add webhook before setting webhook expressions');
     this._webhooks[this._webhooks.length - 1]['expressions'] = expressions;
     return this;
   }
 
+  /**
+   * Set the JSON body for the most recently added webhook.
+   * @param data - The request body object.
+   * @returns This instance for chaining.
+   */
   body(data: Record<string, unknown>): this {
     if (!this._webhooks.length) throw new Error('Must add webhook before setting body');
     this._webhooks[this._webhooks.length - 1]['body'] = data;
     return this;
   }
 
+  /**
+   * Set query or form parameters for the most recently added webhook.
+   * @param data - The parameters object.
+   * @returns This instance for chaining.
+   */
   params(data: Record<string, unknown>): this {
     if (!this._webhooks.length) throw new Error('Must add webhook before setting params');
     this._webhooks[this._webhooks.length - 1]['params'] = data;
     return this;
   }
 
+  /**
+   * Configure iteration over an array in the webhook response.
+   * @param config - Foreach configuration with input/output keys, append template, and optional max.
+   * @returns This instance for chaining.
+   */
   foreach(config: {
     input_key: string;
     output_key: string;
@@ -144,17 +211,32 @@ export class DataMap {
     return this;
   }
 
+  /**
+   * Set the output template for the most recently added webhook.
+   * @param result - The SwaigFunctionResult to use as the output template.
+   * @returns This instance for chaining.
+   */
   output(result: SwaigFunctionResult): this {
     if (!this._webhooks.length) throw new Error('Must add webhook before setting output');
     this._webhooks[this._webhooks.length - 1]['output'] = result.toDict();
     return this;
   }
 
+  /**
+   * Set a fallback output used when no webhook or expression matches.
+   * @param result - The SwaigFunctionResult to use as the fallback.
+   * @returns This instance for chaining.
+   */
   fallbackOutput(result: SwaigFunctionResult): this {
     this._output = result.toDict();
     return this;
   }
 
+  /**
+   * Set error keys on the most recently added webhook, or globally if no webhook exists.
+   * @param keys - Response keys that indicate an error occurred.
+   * @returns This instance for chaining.
+   */
   errorKeys(keys: string[]): this {
     if (this._webhooks.length) {
       this._webhooks[this._webhooks.length - 1]['error_keys'] = keys;
@@ -164,17 +246,30 @@ export class DataMap {
     return this;
   }
 
+  /**
+   * Set error keys at the top-level data map scope, regardless of webhook context.
+   * @param keys - Response keys that indicate an error occurred.
+   * @returns This instance for chaining.
+   */
   globalErrorKeys(keys: string[]): this {
     this._errorKeys = keys;
     return this;
   }
 
-  /** Register this DataMap tool with an AgentBase instance */
+  /**
+   * Register this DataMap tool with an AgentBase instance.
+   * @param agent - An object with a registerSwaigFunction method (typically an AgentBase).
+   * @returns This instance for chaining.
+   */
   registerWithAgent(agent: { registerSwaigFunction(fn: Record<string, unknown>): unknown }): this {
     agent.registerSwaigFunction(this.toSwaigFunction());
     return this;
   }
 
+  /**
+   * Serialize this data map to a SWAIG function definition object.
+   * @returns A plain object suitable for inclusion in the SWML SWAIG array.
+   */
   toSwaigFunction(): Record<string, unknown> {
     // Build parameter schema
     let paramSchema: Record<string, unknown>;
@@ -215,6 +310,11 @@ export class DataMap {
 
 // ── Helper functions ────────────────────────────────────────────────────
 
+/**
+ * Create a DataMap tool that calls a single API endpoint and formats the response.
+ * @param opts - Configuration including name, URL, response template, and optional parameters.
+ * @returns A configured DataMap instance ready for registration.
+ */
 export function createSimpleApiTool(opts: {
   name: string;
   url: string;
@@ -240,6 +340,11 @@ export function createSimpleApiTool(opts: {
   return dm;
 }
 
+/**
+ * Create a DataMap tool that evaluates expressions against patterns without making HTTP calls.
+ * @param opts - Configuration including name, pattern-result pairs, and optional parameters.
+ * @returns A configured DataMap instance ready for registration.
+ */
 export function createExpressionTool(opts: {
   name: string;
   patterns: Record<string, [string, SwaigFunctionResult]>;

@@ -15,44 +15,70 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** A single message in the Anthropic Messages API format. */
 interface AnthropicMessage {
+  /** Message role ("user" or "assistant"). */
   role: string;
+  /** Message content as text or structured content blocks. */
   content: string | Array<{ type: string; text: string }>;
 }
 
+/** Successful response shape from the Anthropic Messages API. */
 interface AnthropicResponse {
+  /** Unique message ID. */
   id: string;
+  /** Response type identifier. */
   type: string;
+  /** Role of the responder. */
   role: string;
+  /** Array of content blocks in the response. */
   content: Array<{
     type: string;
     text?: string;
   }>;
+  /** Model used for the response. */
   model: string;
+  /** Reason the response stopped. */
   stop_reason: string;
+  /** Token usage statistics. */
   usage: {
     input_tokens: number;
     output_tokens: number;
   };
+  /** Error information, if the request failed. */
   error?: {
     type: string;
     message: string;
   };
 }
 
+/** Error response shape from the Anthropic API. */
 interface AnthropicErrorResponse {
+  /** Always "error" for error responses. */
   type: 'error';
+  /** Error details. */
   error: {
     type: string;
     message: string;
   };
 }
 
+/**
+ * Provides access to Anthropic's Claude AI for sub-queries and complex reasoning.
+ *
+ * Tier 3 built-in skill. Requires the `ANTHROPIC_API_KEY` environment variable.
+ * Supports `model` and `max_tokens` config options to control which Claude model
+ * is used and the maximum response length.
+ */
 export class ClaudeSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `model` and `max_tokens`.
+   */
   constructor(config?: SkillConfig) {
     super('claude_skills', config);
   }
 
+  /** @returns Manifest declaring ANTHROPIC_API_KEY as required and config schema for model/max_tokens. */
   getManifest(): SkillManifest {
     return {
       name: 'claude_skills',
@@ -77,6 +103,7 @@ export class ClaudeSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `ask_claude` tool that sends prompts to the Claude API. */
   getTools(): SkillToolDefinition[] {
     const model = this.getConfig<string>('model', 'claude-sonnet-4-5-20250929');
     const maxTokens = this.getConfig<number>('max_tokens', 1024);
@@ -184,6 +211,7 @@ export class ClaudeSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing Claude AI delegation capabilities. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -203,6 +231,8 @@ export class ClaudeSkill extends SkillBase {
 
 /**
  * Factory function for creating ClaudeSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new ClaudeSkill instance.
  */
 export function createSkill(config?: SkillConfig): ClaudeSkill {
   return new ClaudeSkill(config);

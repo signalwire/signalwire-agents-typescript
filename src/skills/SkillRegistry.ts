@@ -10,16 +10,27 @@ import { getLogger } from '../Logger.js';
 
 const log = getLogger('SkillRegistry');
 
+/** Factory function that creates a SkillBase instance from optional configuration. */
 export type SkillFactory = (config?: SkillConfig) => SkillBase;
 
+/** Internal registry entry associating a skill name with its factory and optional manifest. */
 interface RegistryEntry {
+  /** Registered skill name. */
   name: string;
+  /** Factory function to create instances of this skill. */
   factory: SkillFactory;
+  /** Optional pre-loaded manifest for the skill. */
   manifest?: SkillManifest;
 }
 
 let _instance: SkillRegistry | null = null;
 
+/**
+ * Global singleton registry for discovering and instantiating skills.
+ *
+ * Skills can be registered programmatically or auto-discovered from directories.
+ * Supports the SIGNALWIRE_SKILL_PATHS environment variable for custom skill directories.
+ */
 export class SkillRegistry {
   private registry: Map<string, RegistryEntry> = new Map();
   private searchPaths: string[];
@@ -30,7 +41,8 @@ export class SkillRegistry {
   }
 
   /**
-   * Get the global singleton instance.
+   * Get the global singleton instance, creating it on first access.
+   * @returns The shared SkillRegistry instance.
    */
   static getInstance(): SkillRegistry {
     if (!_instance) {
@@ -47,7 +59,10 @@ export class SkillRegistry {
   }
 
   /**
-   * Register a skill factory by name.
+   * Register a skill factory by name, optionally with a pre-loaded manifest.
+   * @param name - The unique skill name.
+   * @param factory - Factory function to create skill instances.
+   * @param manifest - Optional manifest metadata for the skill.
    */
   register(name: string, factory: SkillFactory, manifest?: SkillManifest): void {
     if (this.registry.has(name)) {
@@ -58,14 +73,19 @@ export class SkillRegistry {
   }
 
   /**
-   * Unregister a skill by name.
+   * Unregister a skill by name, removing it from the registry.
+   * @param name - The skill name to unregister.
+   * @returns True if the skill was found and removed.
    */
   unregister(name: string): boolean {
     return this.registry.delete(name);
   }
 
   /**
-   * Create a skill instance by name.
+   * Create a new skill instance by looking up its factory in the registry.
+   * @param name - The registered skill name.
+   * @param config - Optional configuration to pass to the factory.
+   * @returns A new skill instance, or null if the name is not registered.
    */
   create(name: string, config?: SkillConfig): SkillBase | null {
     const entry = this.registry.get(name);
@@ -77,14 +97,18 @@ export class SkillRegistry {
   }
 
   /**
-   * Check if a skill is registered.
+   * Check if a skill name is registered.
+   * @param name - The skill name to check.
+   * @returns True if the skill is registered.
    */
   has(name: string): boolean {
     return this.registry.has(name);
   }
 
   /**
-   * Get the manifest for a registered skill.
+   * Get the manifest for a registered skill, if available.
+   * @param name - The skill name to look up.
+   * @returns The skill manifest, or undefined if not found or not provided.
    */
   getManifest(name: string): SkillManifest | undefined {
     return this.registry.get(name)?.manifest;
@@ -92,13 +116,15 @@ export class SkillRegistry {
 
   /**
    * List all registered skill names.
+   * @returns Array of registered skill name strings.
    */
   listRegistered(): string[] {
     return Array.from(this.registry.keys());
   }
 
   /**
-   * List all registered skills with their manifests.
+   * List all registered skills with their optional manifests.
+   * @returns Array of objects containing skill name and manifest.
    */
   listRegisteredWithManifests(): { name: string; manifest?: SkillManifest }[] {
     return Array.from(this.registry.values()).map(e => ({
@@ -108,7 +134,8 @@ export class SkillRegistry {
   }
 
   /**
-   * Add a search path for skill discovery.
+   * Add a directory path to search during skill discovery.
+   * @param path - Absolute path to a directory containing skill files.
    */
   addSearchPath(path: string): void {
     if (!this.searchPaths.includes(path)) {
@@ -117,15 +144,18 @@ export class SkillRegistry {
   }
 
   /**
-   * Get all search paths.
+   * Get all configured search paths for skill discovery.
+   * @returns Copy of the search paths array.
    */
   getSearchPaths(): string[] {
     return [...this.searchPaths];
   }
 
   /**
-   * Discover and register skills from a directory.
-   * Looks for files exporting a SkillBase subclass or a factory function.
+   * Discover and register skills from a directory by importing each file.
+   * Looks for modules exporting a `createSkill` factory or a SkillBase default export.
+   * @param dirPath - Absolute path to the directory to scan.
+   * @returns Array of newly discovered skill names.
    */
   async discoverFromDirectory(dirPath: string): Promise<string[]> {
     const { readdir } = await import('node:fs/promises');
@@ -172,7 +202,8 @@ export class SkillRegistry {
   }
 
   /**
-   * Discover skills from all configured search paths.
+   * Discover and register skills from all configured search paths.
+   * @returns Array of all newly discovered skill names.
    */
   async discoverAll(): Promise<string[]> {
     const all: string[] = [];
@@ -184,7 +215,8 @@ export class SkillRegistry {
   }
 
   /**
-   * Get the count of registered skills.
+   * Get the number of registered skills.
+   * @returns The count of registered skills.
    */
   get size(): number {
     return this.registry.size;

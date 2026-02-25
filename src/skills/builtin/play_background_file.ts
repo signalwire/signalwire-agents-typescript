@@ -15,11 +15,22 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/**
+ * Controls background audio playback during calls via SWML actions.
+ *
+ * Tier 2 built-in skill with no external dependencies. Provides tools to play
+ * and stop background audio files (e.g., hold music, ambient sounds). Supports
+ * `default_file_url` and `allowed_domains` config options.
+ */
 export class PlayBackgroundFileSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `default_file_url` and `allowed_domains`.
+   */
   constructor(config?: SkillConfig) {
     super('play_background_file', config);
   }
 
+  /** @returns Manifest with config schema for default_file_url and allowed_domains. */
   getManifest(): SkillManifest {
     return {
       name: 'play_background_file',
@@ -43,6 +54,7 @@ export class PlayBackgroundFileSkill extends SkillBase {
     };
   }
 
+  /** @returns Two tools: `play_background` to start audio and `stop_background` to stop it. */
   getTools(): SkillToolDefinition[] {
     const defaultFileUrl = this.getConfig<string | undefined>(
       'default_file_url',
@@ -137,6 +149,7 @@ export class PlayBackgroundFileSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing background audio playback capabilities. */
   getPromptSections(): SkillPromptSection[] {
     const defaultFileUrl = this.getConfig<string | undefined>(
       'default_file_url',
@@ -168,6 +181,8 @@ export class PlayBackgroundFileSkill extends SkillBase {
 
 /**
  * Factory function for creating PlayBackgroundFileSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new PlayBackgroundFileSkill instance.
  */
 export function createSkill(config?: SkillConfig): PlayBackgroundFileSkill {
   return new PlayBackgroundFileSkill(config);

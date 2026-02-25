@@ -15,25 +15,46 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** A single search result from the DataSphere API. */
 interface DataSphereResult {
+  /** Matched text chunk content. */
   text: string;
+  /** Distance score (lower is more similar). */
   score: number;
+  /** ID of the source document. */
   document_id?: string;
+  /** Document metadata. */
   metadata?: Record<string, unknown>;
+  /** Index of the chunk within the document. */
   chunk_index?: number;
 }
 
+/** Response shape from the SignalWire DataSphere search API. */
 interface DataSphereResponse {
+  /** Array of search results. */
   results?: DataSphereResult[];
+  /** Error message if the request failed. */
   error?: string;
+  /** Additional error information. */
   message?: string;
 }
 
+/**
+ * Searches SignalWire DataSphere for knowledge base content using semantic search.
+ *
+ * Tier 3 built-in skill. Requires `SIGNALWIRE_PROJECT_ID`, `SIGNALWIRE_TOKEN`,
+ * and `SIGNALWIRE_SPACE` environment variables. Supports `max_results` and
+ * `distance_threshold` config options.
+ */
 export class DataSphereSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `max_results` and `distance_threshold`.
+   */
   constructor(config?: SkillConfig) {
     super('datasphere', config);
   }
 
+  /** @returns Manifest declaring SignalWire credentials as required env vars. */
   getManifest(): SkillManifest {
     return {
       name: 'datasphere',
@@ -59,6 +80,7 @@ export class DataSphereSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `search_datasphere` tool that performs semantic search on uploaded documents. */
   getTools(): SkillToolDefinition[] {
     const maxResults = this.getConfig<number>('max_results', 5);
     const distanceThreshold = this.getConfig<number>('distance_threshold', 0.7);
@@ -175,6 +197,7 @@ export class DataSphereSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing DataSphere knowledge base search capabilities. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -194,6 +217,8 @@ export class DataSphereSkill extends SkillBase {
 
 /**
  * Factory function for creating DataSphereSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new DataSphereSkill instance.
  */
 export function createSkill(config?: SkillConfig): DataSphereSkill {
   return new DataSphereSkill(config);

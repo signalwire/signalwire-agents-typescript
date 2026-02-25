@@ -15,22 +15,41 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** A single crawl result from the Spider API. */
 interface SpiderResult {
+  /** Raw HTML content of the page. */
   content?: string;
+  /** Markdown-formatted content. */
   markdown?: string;
+  /** Plain text content. */
   text?: string;
+  /** Resolved URL of the crawled page. */
   url?: string;
+  /** HTTP status code of the crawl. */
   status?: number;
+  /** Error message if the crawl failed. */
   error?: string;
 }
 
+/** Response from the Spider API, which may be an array, single result, or error object. */
 type SpiderResponse = SpiderResult[] | SpiderResult | { error: string; message?: string };
 
+/**
+ * Scrapes webpage content using the Spider API.
+ *
+ * Tier 3 built-in skill. Requires the `SPIDER_API_KEY` environment variable.
+ * Extracts text, markdown, or HTML from any public URL, with optional CSS
+ * selector filtering. Supports `max_content_length` config option.
+ */
 export class SpiderSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `max_content_length`.
+   */
   constructor(config?: SkillConfig) {
     super('spider', config);
   }
 
+  /** @returns Manifest declaring SPIDER_API_KEY as required and config schema for max_content_length. */
   getManifest(): SkillManifest {
     return {
       name: 'spider',
@@ -51,6 +70,7 @@ export class SpiderSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `scrape_url` tool that extracts content from a web page. */
   getTools(): SkillToolDefinition[] {
     const maxContentLength = this.getConfig<number>('max_content_length', 5000);
 
@@ -183,6 +203,7 @@ export class SpiderSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing web scraping capabilities and content limits. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -203,6 +224,8 @@ export class SpiderSkill extends SkillBase {
 
 /**
  * Factory function for creating SpiderSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new SpiderSkill instance.
  */
 export function createSkill(config?: SkillConfig): SpiderSkill {
   return new SpiderSkill(config);

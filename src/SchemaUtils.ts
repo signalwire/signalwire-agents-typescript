@@ -5,8 +5,11 @@
  * Set SWML_SKIP_SCHEMA_VALIDATION=true to disable.
  */
 
+/** Result of validating a SWML document. */
 export interface ValidationResult {
+  /** Whether the document passed all validation checks. */
   valid: boolean;
+  /** List of human-readable error messages; empty when valid. */
   errors: string[];
 }
 
@@ -14,18 +17,25 @@ export interface ValidationResult {
 const REQUIRED_TOP_LEVEL = ['version', 'sections'];
 const VALID_VERSIONS = ['1.0.0'];
 
+/** Validates SWML documents against structural rules with an LRU-style result cache. */
 export class SchemaUtils {
   private skipValidation: boolean;
   private cache: Map<string, ValidationResult> = new Map();
   private maxCacheSize: number;
 
+  /**
+   * Create a SchemaUtils instance.
+   * @param opts - Optional settings for skipping validation or limiting cache size.
+   */
   constructor(opts?: { skipValidation?: boolean; maxCacheSize?: number }) {
     this.skipValidation = opts?.skipValidation ?? (process.env['SWML_SKIP_SCHEMA_VALIDATION'] === 'true');
     this.maxCacheSize = opts?.maxCacheSize ?? 100;
   }
 
   /**
-   * Validate a SWML document (JSON string or object).
+   * Validate a SWML document against structural rules.
+   * @param swml - The SWML document as a JSON string or parsed object.
+   * @returns The validation result indicating success or a list of errors.
    */
   validate(swml: string | Record<string, unknown>): ValidationResult {
     if (this.skipValidation) {
@@ -141,7 +151,10 @@ export class SchemaUtils {
     this.cache.clear();
   }
 
-  /** Get cache size */
+  /**
+   * Get the number of cached validation results.
+   * @returns The current cache entry count.
+   */
   getCacheSize(): number {
     return this.cache.size;
   }

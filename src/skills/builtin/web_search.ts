@@ -15,22 +15,32 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** A single search result item from the Google Custom Search API. */
 interface GoogleSearchItem {
+  /** Title of the search result. */
   title: string;
+  /** URL of the search result. */
   link: string;
+  /** Brief text snippet from the page. */
   snippet: string;
+  /** Display-friendly domain name. */
   displayLink?: string;
+  /** Structured page metadata. */
   pagemap?: Record<string, unknown>;
 }
 
+/** Response shape from the Google Custom Search JSON API. */
 interface GoogleSearchResponse {
+  /** Array of search result items. */
   items?: GoogleSearchItem[];
+  /** Metadata about the search execution. */
   searchInformation?: {
     totalResults: string;
     searchTime: number;
     formattedTotalResults: string;
     formattedSearchTime: string;
   };
+  /** Error details if the request failed. */
   error?: {
     code: number;
     message: string;
@@ -38,11 +48,22 @@ interface GoogleSearchResponse {
   };
 }
 
+/**
+ * Searches the web using the Google Custom Search JSON API.
+ *
+ * Tier 3 built-in skill. Requires `GOOGLE_SEARCH_API_KEY` and `GOOGLE_SEARCH_CX`
+ * environment variables. Supports `max_results` (1-10) and `safe_search`
+ * ("off"|"medium"|"high") config options.
+ */
 export class WebSearchSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `max_results` and `safe_search`.
+   */
   constructor(config?: SkillConfig) {
     super('web_search', config);
   }
 
+  /** @returns Manifest declaring GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX as required. */
   getManifest(): SkillManifest {
     return {
       name: 'web_search',
@@ -69,6 +90,7 @@ export class WebSearchSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `web_search` tool that performs a Google search and returns formatted results. */
   getTools(): SkillToolDefinition[] {
     const configMaxResults = this.getConfig<number>('max_results', 5);
     const safeSearch = this.getConfig<string>('safe_search', 'medium');
@@ -162,6 +184,7 @@ export class WebSearchSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing web search capabilities and usage guidance. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -181,6 +204,8 @@ export class WebSearchSkill extends SkillBase {
 
 /**
  * Factory function for creating WebSearchSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new WebSearchSkill instance.
  */
 export function createSkill(config?: SkillConfig): WebSearchSkill {
   return new WebSearchSkill(config);

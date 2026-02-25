@@ -15,17 +15,26 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** Response shape from the Wikipedia REST API page summary endpoint. */
 interface WikipediaSummaryResponse {
+  /** Page type (e.g., "standard", "disambiguation"). */
   type: string;
+  /** Article title. */
   title: string;
+  /** HTML-formatted display title. */
   displaytitle?: string;
+  /** Plain-text article extract/summary. */
   extract: string;
+  /** HTML-formatted extract. */
   extract_html?: string;
+  /** Short description of the article. */
   description?: string;
+  /** URLs to the full article. */
   content_urls?: {
     desktop?: { page: string };
     mobile?: { page: string };
   };
+  /** Thumbnail image information. */
   thumbnail?: {
     source: string;
     width: number;
@@ -33,7 +42,9 @@ interface WikipediaSummaryResponse {
   };
 }
 
+/** Response shape from the Wikipedia search API. */
 interface WikipediaSearchResponse {
+  /** Array of matching page results. */
   pages?: Array<{
     id: number;
     key: string;
@@ -43,11 +54,22 @@ interface WikipediaSearchResponse {
   }>;
 }
 
+/**
+ * Searches Wikipedia for article summaries and extracts.
+ *
+ * Tier 3 built-in skill with no external API key required. Uses the Wikipedia
+ * REST API to fetch article summaries for any given topic, with a configurable
+ * number of sentences.
+ */
 export class WikipediaSearchSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration (no config keys used by this skill).
+   */
   constructor(config?: SkillConfig) {
     super('wikipedia_search', config);
   }
 
+  /** @returns Manifest with skill metadata (no required env vars). */
   getManifest(): SkillManifest {
     return {
       name: 'wikipedia_search',
@@ -59,6 +81,7 @@ export class WikipediaSearchSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `search_wikipedia` tool that fetches article summaries from Wikipedia. */
   getTools(): SkillToolDefinition[] {
     return [
       {
@@ -197,6 +220,7 @@ export class WikipediaSearchSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing Wikipedia search capabilities and usage guidance. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -216,6 +240,8 @@ export class WikipediaSearchSkill extends SkillBase {
 
 /**
  * Factory function for creating WikipediaSearchSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new WikipediaSearchSkill instance.
  */
 export function createSkill(config?: SkillConfig): WikipediaSearchSkill {
   return new WikipediaSearchSkill(config);

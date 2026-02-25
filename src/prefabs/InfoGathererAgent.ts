@@ -47,6 +47,7 @@ interface GatherSession {
 
 // ── Agent ───────────────────────────────────────────────────────────────────
 
+/** Prefab agent that sequentially collects named fields from a caller with optional validation and completion callback. */
 export class InfoGathererAgent extends AgentBase {
   private fields: InfoGathererField[];
   private introMessage: string;
@@ -76,6 +77,10 @@ export class InfoGathererAgent extends AgentBase {
     },
   ];
 
+  /**
+   * Create an InfoGathererAgent with the specified fields and callbacks.
+   * @param config - Configuration including fields to collect, messages, and completion callback.
+   */
   constructor(config: InfoGathererConfig) {
     const agentName = config.name ?? 'InfoGatherer';
     super({
@@ -143,6 +148,7 @@ export class InfoGathererAgent extends AgentBase {
 
   // ── Tool registration ─────────────────────────────────────────────────
 
+  /** Register the save_field and get_status SWAIG tools. */
   protected override defineTools(): void {
     // Tool: save_field
     this.defineTool({
@@ -258,6 +264,11 @@ export class InfoGathererAgent extends AgentBase {
 
 // ── Factory function ────────────────────────────────────────────────────────
 
+/**
+ * Factory function that creates and returns a new InfoGathererAgent.
+ * @param config - Configuration for the info gatherer agent.
+ * @returns A configured InfoGathererAgent instance.
+ */
 export function createInfoGathererAgent(config: InfoGathererConfig): InfoGathererAgent {
   return new InfoGathererAgent(config);
 }

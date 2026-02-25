@@ -36,12 +36,14 @@ export interface FAQBotConfig {
 
 // ── Agent ───────────────────────────────────────────────────────────────────
 
+/** Prefab agent that answers frequently asked questions using keyword matching with optional escalation to a live agent. */
 export class FAQBotAgent extends AgentBase {
   private faqs: FAQEntry[];
   private threshold: number;
   private escalationMessage: string;
   private escalationNumber: string | null;
 
+  /** Declarative prompt sections merged by AgentBase constructor. */
   static override PROMPT_SECTIONS = [
     {
       title: 'Role',
@@ -59,6 +61,10 @@ export class FAQBotAgent extends AgentBase {
     },
   ];
 
+  /**
+   * Create a FAQBotAgent with the specified FAQ entries and matching threshold.
+   * @param config - Configuration including FAQ entries, threshold, and escalation settings.
+   */
   constructor(config: FAQBotConfig) {
     const agentName = config.name ?? 'FAQBot';
     super({
@@ -148,6 +154,7 @@ export class FAQBotAgent extends AgentBase {
 
   // ── Tool registration ─────────────────────────────────────────────────
 
+  /** Register the search_faq and optional escalate SWAIG tools. */
   protected override defineTools(): void {
     // Tool: search_faq
     this.defineTool({
@@ -244,6 +251,11 @@ const STOP_WORDS = new Set([
 
 // ── Factory function ────────────────────────────────────────────────────────
 
+/**
+ * Factory function that creates and returns a new FAQBotAgent.
+ * @param config - Configuration for the FAQ bot agent.
+ * @returns A configured FAQBotAgent instance.
+ */
 export function createFAQBotAgent(config: FAQBotConfig): FAQBotAgent {
   return new FAQBotAgent(config);
 }

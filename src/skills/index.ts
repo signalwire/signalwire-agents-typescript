@@ -1,5 +1,8 @@
 /**
  * Skills framework for SignalWire AI Agents.
+ *
+ * Exports the base class, manager, registry, and all associated types
+ * needed to create, register, and manage agent skills.
  */
 
 export { SkillBase } from './SkillBase.js';

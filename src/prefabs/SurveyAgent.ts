@@ -63,6 +63,7 @@ interface SurveySession {
 
 // ── Agent ───────────────────────────────────────────────────────────────────
 
+/** Prefab agent that conducts surveys with branching logic, answer scoring, and conditional question flow. */
 export class SurveyAgent extends AgentBase {
   private questions: SurveyQuestion[];
   private questionMap: Map<string, SurveyQuestion>;
@@ -71,6 +72,7 @@ export class SurveyAgent extends AgentBase {
   private onCompleteCallback?: (responses: Record<string, unknown>, score: number) => void | Promise<void>;
   private sessions: Map<string, SurveySession> = new Map();
 
+  /** Declarative prompt sections merged by AgentBase constructor. */
   static override PROMPT_SECTIONS = [
     {
       title: 'Role',
@@ -92,6 +94,10 @@ export class SurveyAgent extends AgentBase {
     },
   ];
 
+  /**
+   * Create a SurveyAgent with the specified questions and callbacks.
+   * @param config - Configuration including questions, messages, and completion callback.
+   */
   constructor(config: SurveyConfig) {
     const agentName = config.name ?? 'SurveyAgent';
     super({
@@ -233,6 +239,7 @@ export class SurveyAgent extends AgentBase {
 
   // ── Tool registration ─────────────────────────────────────────────────
 
+  /** Register the answer_question, get_current_question, and get_survey_progress SWAIG tools. */
   protected override defineTools(): void {
     // Tool: answer_question
     this.defineTool({
@@ -394,6 +401,11 @@ export class SurveyAgent extends AgentBase {
 
 // ── Factory function ────────────────────────────────────────────────────────
 
+/**
+ * Factory function that creates and returns a new SurveyAgent.
+ * @param config - Configuration for the survey agent.
+ * @returns A configured SurveyAgent instance.
+ */
 export function createSurveyAgent(config: SurveyConfig): SurveyAgent {
   return new SurveyAgent(config);
 }

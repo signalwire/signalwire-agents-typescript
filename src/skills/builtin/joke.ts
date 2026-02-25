@@ -14,9 +14,13 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** Internal representation of a joke with setup and punchline. */
 interface Joke {
+  /** Joke category (e.g., "general", "programming", "dad"). */
   category: string;
+  /** The joke setup line. */
   setup: string;
+  /** The joke punchline. */
   punchline: string;
 }
 
@@ -78,11 +82,21 @@ const JOKES: Joke[] = [
 
 const VALID_CATEGORIES = ['general', 'programming', 'dad'];
 
+/**
+ * Tells random jokes from a curated built-in collection.
+ *
+ * Tier 1 built-in skill with no external dependencies. Includes general,
+ * programming, and dad joke categories.
+ */
 export class JokeSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration (no config keys used by this skill).
+   */
   constructor(config?: SkillConfig) {
     super('joke', config);
   }
 
+  /** @returns Manifest with skill metadata and tags. */
   getManifest(): SkillManifest {
     return {
       name: 'joke',
@@ -92,6 +106,7 @@ export class JokeSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `tell_joke` tool that returns a random joke with optional category filter. */
   getTools(): SkillToolDefinition[] {
     return [
       {
@@ -138,6 +153,7 @@ export class JokeSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section instructing the AI how to deliver jokes. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -156,6 +172,8 @@ export class JokeSkill extends SkillBase {
 
 /**
  * Factory function for creating JokeSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new JokeSkill instance.
  */
 export function createSkill(config?: SkillConfig): JokeSkill {
   return new JokeSkill(config);

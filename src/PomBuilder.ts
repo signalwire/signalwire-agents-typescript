@@ -6,23 +6,41 @@
  * and nested subsections.
  */
 
+/** Serializable representation of a POM section, used for JSON export. */
 export interface PomSectionData {
+  /** Section heading text. */
   title?: string;
+  /** Section body paragraph text. */
   body?: string;
+  /** List of bullet point strings. */
   bullets?: string[];
+  /** Whether subsections are numbered. */
   numbered?: boolean;
+  /** Whether bullet points are rendered as a numbered list. */
   numberedBullets?: boolean;
+  /** Nested child sections. */
   subsections?: PomSectionData[];
 }
 
+/** A single section in a Prompt Object Model, with optional title, body, bullets, and nested subsections. */
 export class PomSection {
+  /** Section heading text, or null if untitled. */
   title: string | null;
+  /** Section body paragraph text. */
   body: string;
+  /** List of bullet point strings. */
   bullets: string[];
+  /** Nested child sections. */
   subsections: PomSection[];
+  /** Whether this section is numbered when rendered; null means inherit from parent context. */
   numbered: boolean | null;
+  /** Whether bullet points are rendered as a numbered list. */
   numberedBullets: boolean;
 
+  /**
+   * Creates a new PomSection.
+   * @param opts - Optional section configuration.
+   */
   constructor(opts?: {
     title?: string | null;
     body?: string;
@@ -38,6 +56,11 @@ export class PomSection {
     this.numberedBullets = opts?.numberedBullets ?? false;
   }
 
+  /**
+   * Adds a nested subsection to this section.
+   * @param opts - Subsection configuration including title and optional body/bullets.
+   * @returns The newly created child PomSection.
+   */
   addSubsection(opts: {
     title: string;
     body?: string;
@@ -56,6 +79,10 @@ export class PomSection {
     return sub;
   }
 
+  /**
+   * Serializes this section to a plain data object.
+   * @returns A PomSectionData representation of this section and its subsections.
+   */
   toDict(): PomSectionData {
     const data: PomSectionData = {};
     if (this.body) data.body = this.body;
@@ -67,6 +94,12 @@ export class PomSection {
     return data;
   }
 
+  /**
+   * Renders this section and its subsections as a Markdown string.
+   * @param level - The heading level to start at (default 2 for ##).
+   * @param sectionNumber - Hierarchical numbering prefix for numbered sections.
+   * @returns The rendered Markdown string.
+   */
   renderMarkdown(level = 2, sectionNumber: number[] = []): string {
     const lines: string[] = [];
 
@@ -111,10 +144,17 @@ export class PomSection {
   }
 }
 
+/** Builds a structured prompt by composing named POM sections, with Markdown and dict export. */
 export class PomBuilder {
   private sections: PomSection[] = [];
   private sectionMap: Map<string, PomSection> = new Map();
 
+  /**
+   * Adds a new top-level section to the prompt.
+   * @param title - The section heading.
+   * @param opts - Optional body, bullets, numbering, and subsection configuration.
+   * @returns This builder for chaining.
+   */
   addSection(
     title: string,
     opts?: {
@@ -147,6 +187,12 @@ export class PomBuilder {
     return this;
   }
 
+  /**
+   * Appends body text or bullets to an existing section, creating it if absent.
+   * @param title - The section heading to append to.
+   * @param opts - Body text and/or bullets to add.
+   * @returns This builder for chaining.
+   */
   addToSection(
     title: string,
     opts?: { body?: string; bullet?: string; bullets?: string[] },
@@ -163,6 +209,13 @@ export class PomBuilder {
     return this;
   }
 
+  /**
+   * Adds a subsection under an existing parent section, creating the parent if absent.
+   * @param parentTitle - The heading of the parent section.
+   * @param title - The subsection heading.
+   * @param opts - Optional body text and bullets for the subsection.
+   * @returns This builder for chaining.
+   */
   addSubsection(
     parentTitle: string,
     title: string,
@@ -179,14 +232,29 @@ export class PomBuilder {
     return this;
   }
 
+  /**
+   * Checks whether a top-level section with the given title exists.
+   * @param title - The section heading to look for.
+   * @returns True if the section exists.
+   */
   hasSection(title: string): boolean {
     return this.sectionMap.has(title);
   }
 
+  /**
+   * Returns a top-level section by title.
+   * @param title - The section heading to retrieve.
+   * @returns The matching PomSection, or undefined if not found.
+   */
   getSection(title: string): PomSection | undefined {
     return this.sectionMap.get(title);
   }
 
+  /**
+   * Recursively searches all sections and subsections for one matching the given title.
+   * @param title - The section heading to search for.
+   * @returns The matching PomSection, or undefined if not found.
+   */
   findSection(title: string): PomSection | undefined {
     const recurse = (sections: PomSection[]): PomSection | undefined => {
       for (const s of sections) {
@@ -199,10 +267,18 @@ export class PomBuilder {
     return recurse(this.sections);
   }
 
+  /**
+   * Serializes all sections to an array of plain data objects.
+   * @returns An array of PomSectionData representing all top-level sections.
+   */
   toDict(): PomSectionData[] {
     return this.sections.map((s) => s.toDict());
   }
 
+  /**
+   * Renders all sections as a combined Markdown string.
+   * @returns The complete rendered Markdown prompt text.
+   */
   renderMarkdown(): string {
     const anyNumbered = this.sections.some((s) => s.numbered);
     const parts: string[] = [];

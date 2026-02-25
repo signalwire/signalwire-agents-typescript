@@ -43,6 +43,7 @@ interface CheckInSession {
 
 // ── Agent ───────────────────────────────────────────────────────────────────
 
+/** Prefab front-desk agent that handles visitor check-in, department directory lookup, and call transfers by extension. */
 export class ReceptionistAgent extends AgentBase {
   private companyName: string;
   private departments: ReceptionistDepartment[];
@@ -51,6 +52,7 @@ export class ReceptionistAgent extends AgentBase {
   private onVisitorCheckInCallback?: (visitor: Record<string, string>) => void | Promise<void>;
   private sessions: Map<string, CheckInSession> = new Map();
 
+  /** Declarative prompt sections merged by AgentBase constructor. */
   static override PROMPT_SECTIONS = [
     {
       title: 'Role',
@@ -69,6 +71,10 @@ export class ReceptionistAgent extends AgentBase {
     },
   ];
 
+  /**
+   * Create a ReceptionistAgent with the specified company, departments, and check-in settings.
+   * @param config - Configuration including company name, departments, and visitor check-in callback.
+   */
   constructor(config: ReceptionistConfig) {
     const agentName = config.name ?? 'Receptionist';
     super({
@@ -131,6 +137,7 @@ export class ReceptionistAgent extends AgentBase {
 
   // ── Tool registration ─────────────────────────────────────────────────
 
+  /** Register the get_department_list, transfer_to_department, and optional check_in_visitor SWAIG tools. */
   protected override defineTools(): void {
     // Tool: get_department_list
     this.defineTool({
@@ -258,6 +265,11 @@ export class ReceptionistAgent extends AgentBase {
 
 // ── Factory function ────────────────────────────────────────────────────────
 
+/**
+ * Factory function that creates and returns a new ReceptionistAgent.
+ * @param config - Configuration for the receptionist agent.
+ * @returns A configured ReceptionistAgent instance.
+ */
 export function createReceptionistAgent(config: ReceptionistConfig): ReceptionistAgent {
   return new ReceptionistAgent(config);
 }

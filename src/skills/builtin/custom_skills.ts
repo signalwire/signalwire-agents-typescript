@@ -19,39 +19,69 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** Parameter definition for a custom tool. */
 interface CustomToolParameter {
+  /** Parameter name. */
   name: string;
+  /** Parameter type (e.g., "string", "number"). */
   type: string;
+  /** Description of the parameter. */
   description: string;
+  /** Whether this parameter is required. */
   required?: boolean;
 }
 
+/** Full definition of a user-defined custom tool provided via configuration. */
 interface CustomToolDefinition {
+  /** Unique tool name. */
   name: string;
+  /** Tool description shown to the AI. */
   description: string;
+  /** Optional array of parameter definitions. */
   parameters?: CustomToolParameter[];
+  /** JavaScript function body executed when the tool is invoked. */
   handler_code: string;
+  /** Names of required parameters. */
   required?: string[];
+  /** Optional description used in the prompt section instead of the tool description. */
   prompt_description?: string;
+  /** Whether to mark the tool as secure. */
   secure?: boolean;
+  /** Filler phrases spoken while the tool executes. */
   fillers?: Record<string, string[]>;
 }
 
+/** Typed shape of the custom skills configuration object. */
 interface CustomSkillsConfigData {
+  /** Array of custom tool definitions. */
   tools?: CustomToolDefinition[];
+  /** Custom title for the prompt section. */
   prompt_title?: string;
+  /** Custom body text for the prompt section. */
   prompt_body?: string;
 }
 
+/**
+ * A meta-skill that registers user-defined tools from configuration.
+ *
+ * Tier 2 built-in skill with no external dependencies. Allows users to define
+ * arbitrary tools via config without writing skill classes. Each tool definition
+ * specifies a name, description, parameters, and a JavaScript handler function
+ * body that is compiled via the Function constructor at instantiation time.
+ */
 export class CustomSkillsSkill extends SkillBase {
   private _compiledHandlers: Map<string, Function> = new Map();
   private _compilationErrors: Map<string, string> = new Map();
 
+  /**
+   * @param config - Configuration object containing a `tools` array of custom tool definitions.
+   */
   constructor(config?: SkillConfig) {
     super('custom_skills', config);
     this._compileHandlers();
   }
 
+  /** @returns Manifest with config schema describing the tools array format. */
   getManifest(): SkillManifest {
     return {
       name: 'custom_skills',
@@ -146,6 +176,7 @@ export class CustomSkillsSkill extends SkillBase {
     return configData.tools ?? [];
   }
 
+  /** @returns Array of dynamically generated tools from the configuration, with compiled handlers. */
   getTools(): SkillToolDefinition[] {
     const toolDefs = this._getToolDefs();
     const tools: SkillToolDefinition[] = [];
@@ -217,6 +248,7 @@ export class CustomSkillsSkill extends SkillBase {
     return tools;
   }
 
+  /** @returns Prompt section listing all custom tools and their descriptions. */
   getPromptSections(): SkillPromptSection[] {
     const toolDefs = this._getToolDefs();
     const configData = this.config as unknown as CustomSkillsConfigData;
@@ -276,7 +308,8 @@ export class CustomSkillsSkill extends SkillBase {
   }
 
   /**
-   * Get any compilation errors for diagnostic purposes.
+   * Get handler compilation errors for diagnostic purposes.
+   * @returns A copy of the map from tool name to error message.
    */
   getCompilationErrors(): Map<string, string> {
     return new Map(this._compilationErrors);
@@ -285,6 +318,8 @@ export class CustomSkillsSkill extends SkillBase {
 
 /**
  * Factory function for creating CustomSkillsSkill instances.
+ * @param config - Configuration containing a `tools` array of custom tool definitions.
+ * @returns A new CustomSkillsSkill instance.
  */
 export function createSkill(config?: SkillConfig): CustomSkillsSkill {
   return new CustomSkillsSkill(config);

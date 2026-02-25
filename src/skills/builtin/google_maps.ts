@@ -15,6 +15,7 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** A single leg of a route from the Google Directions API. */
 interface DirectionsLeg {
   distance: { text: string; value: number };
   duration: { text: string; value: number };
@@ -28,6 +29,7 @@ interface DirectionsLeg {
   }>;
 }
 
+/** A single route option from the Google Directions API response. */
 interface DirectionsRoute {
   summary: string;
   legs: DirectionsLeg[];
@@ -35,12 +37,14 @@ interface DirectionsRoute {
   copyrights: string;
 }
 
+/** Response shape from the Google Directions API. */
 interface DirectionsResponse {
   status: string;
   routes: DirectionsRoute[];
   error_message?: string;
 }
 
+/** A place candidate result from the Google Places Find Place API. */
 interface PlaceCandidate {
   name: string;
   formatted_address: string;
@@ -52,17 +56,28 @@ interface PlaceCandidate {
   types?: string[];
 }
 
+/** Response shape from the Google Places Find Place API. */
 interface PlacesResponse {
   candidates: PlaceCandidate[];
   status: string;
   error_message?: string;
 }
 
+/**
+ * Provides driving/walking/transit directions and place search via Google Maps APIs.
+ *
+ * Tier 3 built-in skill. Requires the `GOOGLE_MAPS_API_KEY` environment variable.
+ * Supports a `default_mode` config option ("driving"|"walking"|"bicycling"|"transit").
+ */
 export class GoogleMapsSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `default_mode` for travel mode.
+   */
   constructor(config?: SkillConfig) {
     super('google_maps', config);
   }
 
+  /** @returns Manifest declaring GOOGLE_MAPS_API_KEY as required and config schema for default_mode. */
   getManifest(): SkillManifest {
     return {
       name: 'google_maps',
@@ -83,6 +98,7 @@ export class GoogleMapsSkill extends SkillBase {
     };
   }
 
+  /** @returns Two tools: `get_directions` for route info and `find_place` for place discovery. */
   getTools(): SkillToolDefinition[] {
     const defaultMode = this.getConfig<string>('default_mode', 'driving');
 
@@ -300,6 +316,7 @@ export class GoogleMapsSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing directions and place search capabilities. */
   getPromptSections(): SkillPromptSection[] {
     const defaultMode = this.getConfig<string>('default_mode', 'driving');
 
@@ -322,6 +339,8 @@ export class GoogleMapsSkill extends SkillBase {
 
 /**
  * Factory function for creating GoogleMapsSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new GoogleMapsSkill instance.
  */
 export function createSkill(config?: SkillConfig): GoogleMapsSkill {
   return new GoogleMapsSkill(config);

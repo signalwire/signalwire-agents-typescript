@@ -15,9 +15,13 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** Response shape from the API Ninjas trivia endpoint. */
 interface TriviaResponse {
+  /** Trivia category name. */
   category: string;
+  /** The trivia question text. */
   question: string;
+  /** The correct answer. */
   answer: string;
 }
 
@@ -38,11 +42,21 @@ const VALID_CATEGORIES = [
   'sportsleisure',
 ] as const;
 
+/**
+ * Fetches trivia questions from the API Ninjas service.
+ *
+ * Tier 2 built-in skill. Requires the `API_NINJAS_KEY` environment variable.
+ * Supports optional `default_category` and `reveal_answer` config options.
+ */
 export class ApiNinjasTriviaSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `default_category` and `reveal_answer`.
+   */
   constructor(config?: SkillConfig) {
     super('api_ninjas_trivia', config);
   }
 
+  /** @returns Manifest declaring API_NINJAS_KEY as required and config schema for category/reveal. */
   getManifest(): SkillManifest {
     return {
       name: 'api_ninjas_trivia',
@@ -68,6 +82,7 @@ export class ApiNinjasTriviaSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `get_trivia` tool that fetches a random trivia question with optional category. */
   getTools(): SkillToolDefinition[] {
     const defaultCategory = this.getConfig<string | undefined>(
       'default_category',
@@ -165,6 +180,7 @@ export class ApiNinjasTriviaSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing trivia capabilities and quiz behavior. */
   getPromptSections(): SkillPromptSection[] {
     const revealAnswer = this.getConfig<boolean>('reveal_answer', false);
 
@@ -198,6 +214,7 @@ export class ApiNinjasTriviaSkill extends SkillBase {
     ];
   }
 
+  /** @returns Speech recognition hints for trivia-related keywords. */
   getHints(): string[] {
     return ['trivia', 'quiz', 'question', 'fun fact'];
   }
@@ -205,6 +222,8 @@ export class ApiNinjasTriviaSkill extends SkillBase {
 
 /**
  * Factory function for creating ApiNinjasTriviaSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new ApiNinjasTriviaSkill instance.
  */
 export function createSkill(config?: SkillConfig): ApiNinjasTriviaSkill {
   return new ApiNinjasTriviaSkill(config);

@@ -16,19 +16,28 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** A document entry in the in-memory search index. */
 interface DocumentEntry {
+  /** Unique document identifier. */
   id: string;
+  /** Full text content of the document. */
   text: string;
+  /** Optional metadata associated with the document. */
   metadata?: Record<string, unknown>;
 }
 
+/** A document paired with its relevance score from a search query. */
 interface ScoredDocument {
+  /** The matched document entry. */
   document: DocumentEntry;
+  /** TF-IDF relevance score (higher is more relevant). */
   score: number;
 }
 
 /**
- * Tokenize text into lowercase words, removing punctuation and stop words.
+ * Tokenize text into lowercase words, removing punctuation and common stop words.
+ * @param text - Raw text to tokenize.
+ * @returns Array of meaningful word tokens.
  */
 function tokenize(text: string): string[] {
   const stopWords = new Set([
@@ -54,7 +63,9 @@ function tokenize(text: string): string[] {
 }
 
 /**
- * Compute term frequency for a list of tokens.
+ * Compute normalized term frequency for a list of tokens.
+ * @param tokens - Array of tokenized words.
+ * @returns Map from token to its normalized frequency.
  */
 function termFrequency(tokens: string[]): Map<string, number> {
   const tf = new Map<string, number>();
@@ -70,7 +81,9 @@ function termFrequency(tokens: string[]): Map<string, number> {
 }
 
 /**
- * Compute inverse document frequency for a corpus.
+ * Compute inverse document frequency weights for a tokenized corpus.
+ * @param corpus - Array of token arrays, one per document.
+ * @returns Map from token to its IDF weight.
  */
 function inverseDocumentFrequency(
   corpus: string[][],
@@ -96,6 +109,10 @@ function inverseDocumentFrequency(
 
 /**
  * Score a query against a document using TF-IDF cosine-like similarity.
+ * @param queryTokens - Tokenized query words.
+ * @param docTf - Pre-computed term frequency map for the document.
+ * @param idf - Pre-computed inverse document frequency map.
+ * @returns Similarity score (higher is more relevant).
  */
 function scoreTfIdf(
   queryTokens: string[],
@@ -116,6 +133,13 @@ function scoreTfIdf(
   return score;
 }
 
+/**
+ * In-memory document search using TF-IDF-like word overlap scoring.
+ *
+ * Tier 3 built-in skill with no external dependencies or API keys required.
+ * Documents are provided via the `documents` config array and indexed at
+ * construction time. Suitable for small to medium document collections.
+ */
 export class NativeVectorSearchSkill extends SkillBase {
   private _documents: DocumentEntry[] = [];
   private _tokenizedDocs: string[][] = [];
@@ -123,11 +147,15 @@ export class NativeVectorSearchSkill extends SkillBase {
   private _idf: Map<string, number> = new Map();
   private _indexed = false;
 
+  /**
+   * @param config - Optional configuration; supports `documents` array of {id, text, metadata?}.
+   */
   constructor(config?: SkillConfig) {
     super('native_vector_search', config);
     this._loadDocuments();
   }
 
+  /** @returns Manifest with config schema for the documents array. */
   getManifest(): SkillManifest {
     return {
       name: 'native_vector_search',
@@ -174,6 +202,7 @@ export class NativeVectorSearchSkill extends SkillBase {
     this._indexed = true;
   }
 
+  /** @returns A single `search_documents` tool that searches indexed documents by text similarity. */
   getTools(): SkillToolDefinition[] {
     return [
       {
@@ -268,6 +297,7 @@ export class NativeVectorSearchSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing the local document search capabilities. */
   getPromptSections(): SkillPromptSection[] {
     const docCount = this._documents.length;
 
@@ -289,6 +319,8 @@ export class NativeVectorSearchSkill extends SkillBase {
 
 /**
  * Factory function for creating NativeVectorSearchSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new NativeVectorSearchSkill instance.
  */
 export function createSkill(config?: SkillConfig): NativeVectorSearchSkill {
   return new NativeVectorSearchSkill(config);

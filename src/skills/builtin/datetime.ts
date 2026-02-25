@@ -13,11 +13,21 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/**
+ * Provides the current date and time with optional timezone support.
+ *
+ * Tier 1 built-in skill with no external dependencies. Supports all IANA
+ * timezone identifiers via the Intl.DateTimeFormat API.
+ */
 export class DateTimeSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration (no config keys used by this skill).
+   */
   constructor(config?: SkillConfig) {
     super('datetime', config);
   }
 
+  /** @returns Manifest with skill metadata and tags. */
   getManifest(): SkillManifest {
     return {
       name: 'datetime',
@@ -27,6 +37,7 @@ export class DateTimeSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `get_datetime` tool that returns the current date/time in a given timezone. */
   getTools(): SkillToolDefinition[] {
     return [
       {
@@ -78,6 +89,7 @@ export class DateTimeSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section instructing the AI how to use the datetime tool. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -95,6 +107,8 @@ export class DateTimeSkill extends SkillBase {
 
 /**
  * Factory function for creating DateTimeSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new DateTimeSkill instance.
  */
 export function createSkill(config?: SkillConfig): DateTimeSkill {
   return new DateTimeSkill(config);

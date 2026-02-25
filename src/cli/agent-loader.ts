@@ -43,6 +43,12 @@ async function importModule(agentPath: string): Promise<Record<string, unknown>>
   }
 }
 
+/**
+ * Dynamically import an agent file and resolve an AgentBase instance using duck-typing heuristics.
+ * @param agentPath - Path to the agent module file.
+ * @param agentClass - Optional name of a specific exported class or instance to use.
+ * @returns The resolved AgentBase instance.
+ */
 export async function loadAgent(agentPath: string, agentClass?: string): Promise<unknown> {
   const mod = await importModule(agentPath);
 
@@ -99,6 +105,8 @@ export async function loadAgent(agentPath: string, agentClass?: string): Promise
 
 /**
  * List all exported agent instances and classes in a module.
+ * @param agentPath - Path to the agent module file.
+ * @returns Array of export names that are AgentBase instances or subclasses.
  */
 export async function listAgents(agentPath: string): Promise<string[]> {
   const mod = await importModule(agentPath);

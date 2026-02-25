@@ -39,12 +39,14 @@ export interface ConciergeConfig {
 
 // ── Agent ───────────────────────────────────────────────────────────────────
 
+/** Prefab agent that provides multi-department routing with a knowledge base of department info, hours, and transfer capabilities. */
 export class ConciergeAgent extends AgentBase {
   private departments: Department[];
   private companyName: string;
   private generalInfo: string;
   private afterHoursMessage: string;
 
+  /** Declarative prompt sections merged by AgentBase constructor. */
   static override PROMPT_SECTIONS = [
     {
       title: 'Role',
@@ -64,6 +66,10 @@ export class ConciergeAgent extends AgentBase {
     },
   ];
 
+  /**
+   * Create a ConciergeAgent with the specified departments and company info.
+   * @param config - Configuration including departments, company name, and after-hours message.
+   */
   constructor(config: ConciergeConfig) {
     const agentName = config.name ?? 'Concierge';
     super({
@@ -116,6 +122,7 @@ export class ConciergeAgent extends AgentBase {
 
   // ── Tool registration ─────────────────────────────────────────────────
 
+  /** Register the list_departments, get_department_info, and transfer_to_department SWAIG tools. */
   protected override defineTools(): void {
     // Tool: list_departments
     this.defineTool({
@@ -232,6 +239,11 @@ export class ConciergeAgent extends AgentBase {
 
 // ── Factory function ────────────────────────────────────────────────────────
 
+/**
+ * Factory function that creates and returns a new ConciergeAgent.
+ * @param config - Configuration for the concierge agent.
+ * @returns A configured ConciergeAgent instance.
+ */
 export function createConciergeAgent(config: ConciergeConfig): ConciergeAgent {
   return new ConciergeAgent(config);
 }

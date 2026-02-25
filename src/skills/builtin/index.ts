@@ -44,7 +44,8 @@ import { createSkill as createClaudeSkill } from './claude_skills.js';
 import { createSkill as createMcpGatewaySkill } from './mcp_gateway.js';
 
 /**
- * Register all built-in skills with the global SkillRegistry.
+ * Register all 18 built-in skills with the global SkillRegistry singleton.
+ * Skips registration for any skill name already present in the registry.
  */
 export function registerBuiltinSkills(): void {
   const registry = SkillRegistry.getInstance();

@@ -17,11 +17,24 @@ import type {
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 import { DataMap } from '../../DataMap.js';
 
+/**
+ * Searches SignalWire DataSphere using a server-side DataMap for serverless execution.
+ *
+ * Tier 3 built-in skill. Requires `SIGNALWIRE_PROJECT_ID`, `SIGNALWIRE_TOKEN`,
+ * and `SIGNALWIRE_SPACE` environment variables. Unlike the standard DataSphere
+ * skill, this generates a DataMap configuration that SignalWire executes directly
+ * without needing a webhook endpoint. Supports `max_results`, `distance_threshold`,
+ * and `document_id` config options.
+ */
 export class DataSphereServerlessSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `max_results`, `distance_threshold`, `document_id`.
+   */
   constructor(config?: SkillConfig) {
     super('datasphere_serverless', config);
   }
 
+  /** @returns Manifest declaring SignalWire credentials as required env vars. */
   getManifest(): SkillManifest {
     return {
       name: 'datasphere_serverless',
@@ -112,9 +125,9 @@ export class DataSphereServerlessSkill extends SkillBase {
   }
 
   /**
-   * Returns an empty array because this skill uses DataMap-based tools
-   * instead of handler-based tools. The DataMap function is registered
-   * via getDataMapTools().
+   * Return a stub tool definition since this skill uses DataMap-based execution.
+   * The actual DataMap function is provided by getDataMapTools().
+   * @returns A single stub `search_datasphere` tool that explains its DataMap nature.
    */
   getTools(): SkillToolDefinition[] {
     // DataMap-based skills do not use handler-based tools.
@@ -147,11 +160,13 @@ export class DataSphereServerlessSkill extends SkillBase {
    * Get DataMap-based tool definitions for server-side execution.
    * These are registered directly in the SWML output as data_map functions
    * rather than as webhook-backed SWAIG tools.
+   * @returns Array containing the DataSphere search DataMap function definition.
    */
   getDataMapTools(): Record<string, unknown>[] {
     return [this.buildDataMapFunction()];
   }
 
+  /** @returns Prompt section describing serverless DataSphere search capabilities. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -171,6 +186,8 @@ export class DataSphereServerlessSkill extends SkillBase {
 
 /**
  * Factory function for creating DataSphereServerlessSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new DataSphereServerlessSkill instance.
  */
 export function createSkill(config?: SkillConfig): DataSphereServerlessSkill {
   return new DataSphereServerlessSkill(config);

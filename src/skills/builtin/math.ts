@@ -18,6 +18,8 @@ import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 /**
  * Validate that an expression contains only safe mathematical characters.
  * Allowed: digits (0-9), operators (+, -, *, /, ^, %), parentheses, decimal points, spaces.
+ * @param expr - The expression string to validate.
+ * @returns True if the expression contains only allowed characters.
  */
 function isSafeExpression(expr: string): boolean {
   return /^[\d+\-*/^%().\s]+$/.test(expr);
@@ -27,6 +29,8 @@ function isSafeExpression(expr: string): boolean {
  * Safely evaluate a mathematical expression.
  * Replaces ^ with ** for exponentiation, then evaluates using Function constructor
  * after validating the expression contains only safe characters.
+ * @param expr - The mathematical expression to evaluate.
+ * @returns The computed numeric result.
  */
 function safeEvaluate(expr: string): number {
   const trimmed = expr.trim();
@@ -55,11 +59,21 @@ function safeEvaluate(expr: string): number {
   return result;
 }
 
+/**
+ * Evaluates mathematical expressions safely using a sandboxed parser.
+ *
+ * Tier 1 built-in skill with no external dependencies. Only allows digits,
+ * basic arithmetic operators, parentheses, decimal points, and spaces.
+ */
 export class MathSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration (no config keys used by this skill).
+   */
   constructor(config?: SkillConfig) {
     super('math', config);
   }
 
+  /** @returns Manifest with skill metadata and tags. */
   getManifest(): SkillManifest {
     return {
       name: 'math',
@@ -69,6 +83,7 @@ export class MathSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `calculate` tool that evaluates a math expression string. */
   getTools(): SkillToolDefinition[] {
     return [
       {
@@ -108,6 +123,7 @@ export class MathSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section instructing the AI how to use the calculate tool. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -126,6 +142,8 @@ export class MathSkill extends SkillBase {
 
 /**
  * Factory function for creating MathSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new MathSkill instance.
  */
 export function createSkill(config?: SkillConfig): MathSkill {
   return new MathSkill(config);

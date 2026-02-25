@@ -10,13 +10,20 @@ import { cors } from 'hono/cors';
 import { AgentBase } from './AgentBase.js';
 import { getLogger } from './Logger.js';
 
+/** Multi-agent HTTP server that hosts multiple AgentBase instances on distinct route prefixes. */
 export class AgentServer {
+  /** Hostname the server binds to. */
   host: string;
+  /** Port the server listens on. */
   port: number;
   private agents: Map<string, AgentBase> = new Map();
   private _app: Hono;
   private log = getLogger('AgentServer');
 
+  /**
+   * Create an AgentServer.
+   * @param opts - Optional host and port overrides; defaults to 0.0.0.0:3000.
+   */
   constructor(opts?: { host?: string; port?: number }) {
     this.host = opts?.host ?? '0.0.0.0';
     this.port = opts?.port ?? parseInt(process.env['PORT'] ?? '3000', 10);
@@ -39,6 +46,12 @@ export class AgentServer {
     this._app.get('/ready', (c) => c.json({ status: 'ready' }));
   }
 
+  /**
+   * Register an agent at the given route prefix.
+   * @param agent - The AgentBase instance to mount.
+   * @param route - Route prefix; defaults to the agent's own route or '/'.
+   * @throws If the route is already occupied by another agent.
+   */
   register(agent: AgentBase, route?: string): void {
     let r = route ?? (agent as any).route ?? '/';
     if (!r.startsWith('/')) r = `/${r}`;
@@ -61,20 +74,37 @@ export class AgentServer {
     this.log.info(`Registered '${agent.name}' at ${r}`);
   }
 
+  /**
+   * Remove an agent registration by route.
+   * @param route - The route prefix to unregister.
+   */
   unregister(route: string): void {
     this.agents.delete(route);
     // Note: Hono doesn't support dynamic route removal,
     // but the agent won't be listed anymore
   }
 
+  /**
+   * Get all registered agents keyed by their route prefix.
+   * @returns A map of route prefixes to AgentBase instances.
+   */
   getAgents(): Map<string, AgentBase> {
     return this.agents;
   }
 
+  /**
+   * Look up a registered agent by its route prefix.
+   * @param route - The route prefix to look up.
+   * @returns The agent at that route, or undefined if none is registered.
+   */
   getAgent(route: string): AgentBase | undefined {
     return this.agents.get(route);
   }
 
+  /**
+   * Build and return the Hono application with all registered agents and a root listing endpoint.
+   * @returns The fully configured Hono app.
+   */
   getApp(): Hono {
     // Add root listing (registered after agents so it doesn't shadow them)
     const listing = [...this.agents.entries()].map(([route, agent]) => ({
@@ -96,6 +126,11 @@ export class AgentServer {
     return this._app;
   }
 
+  /**
+   * Start the HTTP server and begin listening for requests.
+   * @param host - Override the configured hostname.
+   * @param port - Override the configured port.
+   */
   async run(host?: string, port?: number): Promise<void> {
     const { serve } = await import('@hono/node-server');
     const h = host ?? this.host;

@@ -10,11 +10,18 @@ import { getLogger } from '../Logger.js';
 
 const log = getLogger('SkillManager');
 
+/**
+ * Manages the lifecycle of skills attached to an agent.
+ *
+ * Handles loading, unloading, validation, and aggregation of skill tools,
+ * hints, global data, and prompt sections.
+ */
 export class SkillManager {
   private skills: Map<string, SkillBase> = new Map();
 
   /**
-   * Add a skill to the manager. Validates env vars and calls setup().
+   * Add a skill to the manager, validating env vars and calling setup().
+   * @param skill - The skill instance to add.
    */
   async addSkill(skill: SkillBase): Promise<void> {
     const name = skill.skillName;
@@ -38,7 +45,9 @@ export class SkillManager {
   }
 
   /**
-   * Remove a skill by its instance ID.
+   * Remove a skill by its instance ID, calling cleanup() before removal.
+   * @param instanceId - The unique instance ID of the skill to remove.
+   * @returns True if the skill was found and removed, false otherwise.
    */
   async removeSkill(instanceId: string): Promise<boolean> {
     const skill = this.skills.get(instanceId);
@@ -51,7 +60,9 @@ export class SkillManager {
   }
 
   /**
-   * Remove all skills with a given skill name.
+   * Remove all skill instances matching a given skill name.
+   * @param skillName - The skill name to match against.
+   * @returns The number of skill instances removed.
    */
   async removeSkillByName(skillName: string): Promise<number> {
     let count = 0;
@@ -66,7 +77,9 @@ export class SkillManager {
   }
 
   /**
-   * Check if a skill (by name) is loaded.
+   * Check if any skill instance with the given name is currently loaded.
+   * @param skillName - The skill name to check for.
+   * @returns True if at least one instance with this name is loaded.
    */
   hasSkill(skillName: string): boolean {
     for (const skill of this.skills.values()) {
@@ -76,14 +89,17 @@ export class SkillManager {
   }
 
   /**
-   * Get a skill by instance ID.
+   * Get a skill by its unique instance ID.
+   * @param instanceId - The instance ID to look up.
+   * @returns The skill instance, or undefined if not found.
    */
   getSkill(instanceId: string): SkillBase | undefined {
     return this.skills.get(instanceId);
   }
 
   /**
-   * List all loaded skills.
+   * List all loaded skill instances with their name, ID, and initialization state.
+   * @returns Array of skill summary objects.
    */
   listSkills(): { name: string; instanceId: string; initialized: boolean }[] {
     return Array.from(this.skills.values()).map(s => ({
@@ -94,7 +110,8 @@ export class SkillManager {
   }
 
   /**
-   * Get all tool definitions from all loaded skills.
+   * Aggregate tool definitions from all loaded skills.
+   * @returns Combined array of all skill tool definitions.
    */
   getAllTools(): ReturnType<SkillBase['getTools']> {
     const tools: ReturnType<SkillBase['getTools']> = [];
@@ -105,7 +122,8 @@ export class SkillManager {
   }
 
   /**
-   * Get all prompt sections from all loaded skills.
+   * Aggregate prompt sections from all loaded skills.
+   * @returns Combined array of all skill prompt sections.
    */
   getAllPromptSections(): ReturnType<SkillBase['getPromptSections']> {
     const sections: ReturnType<SkillBase['getPromptSections']> = [];
@@ -116,7 +134,8 @@ export class SkillManager {
   }
 
   /**
-   * Get all hints from all loaded skills.
+   * Aggregate speech recognition hints from all loaded skills.
+   * @returns Combined array of all skill hint strings.
    */
   getAllHints(): string[] {
     const hints: string[] = [];
@@ -127,7 +146,8 @@ export class SkillManager {
   }
 
   /**
-   * Get merged global data from all loaded skills.
+   * Merge global data from all loaded skills into a single object.
+   * @returns Combined global data (later skills override earlier ones on key conflicts).
    */
   getMergedGlobalData(): Record<string, unknown> {
     const data: Record<string, unknown> = {};
@@ -138,7 +158,8 @@ export class SkillManager {
   }
 
   /**
-   * Get the count of loaded skills.
+   * Get the number of currently loaded skill instances.
+   * @returns The count of loaded skills.
    */
   get size(): number {
     return this.skills.size;

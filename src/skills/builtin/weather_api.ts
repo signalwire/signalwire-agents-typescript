@@ -15,6 +15,7 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** Response shape from the OpenWeatherMap current weather endpoint. */
 interface WeatherApiResponse {
   name: string;
   sys: { country: string };
@@ -34,11 +35,22 @@ interface WeatherApiResponse {
   message?: string;
 }
 
+/**
+ * Fetches current weather data from OpenWeatherMap for any location worldwide.
+ *
+ * Tier 2 built-in skill. Requires the `WEATHER_API_KEY` environment variable
+ * containing a valid OpenWeatherMap API key. Supports metric, imperial, and
+ * standard temperature units via the `units` config option.
+ */
 export class WeatherApiSkill extends SkillBase {
+  /**
+   * @param config - Optional configuration; supports `units` ("metric"|"imperial"|"standard").
+   */
   constructor(config?: SkillConfig) {
     super('weather_api', config);
   }
 
+  /** @returns Manifest declaring WEATHER_API_KEY as required and config schema for units. */
   getManifest(): SkillManifest {
     return {
       name: 'weather_api',
@@ -59,6 +71,7 @@ export class WeatherApiSkill extends SkillBase {
     };
   }
 
+  /** @returns A single `get_weather` tool that fetches current weather for a location. */
   getTools(): SkillToolDefinition[] {
     const units = this.getConfig<string>('units', 'metric');
 
@@ -144,6 +157,7 @@ export class WeatherApiSkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section describing weather lookup capabilities and configured units. */
   getPromptSections(): SkillPromptSection[] {
     const units = this.getConfig<string>('units', 'metric');
     const unitDesc =
@@ -171,6 +185,8 @@ export class WeatherApiSkill extends SkillBase {
 
 /**
  * Factory function for creating WeatherApiSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new WeatherApiSkill instance.
  */
 export function createSkill(config?: SkillConfig): WeatherApiSkill {
   return new WeatherApiSkill(config);

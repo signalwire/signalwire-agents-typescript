@@ -16,11 +16,22 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/**
+ * Placeholder skill for future Model Context Protocol (MCP) server integration.
+ *
+ * Tier 3 stub implementation. When fully implemented, this skill will allow
+ * agents to invoke tools exposed by external MCP servers. Currently provides
+ * a non-functional `mcp_invoke` tool that returns a "not yet implemented" message.
+ */
 export class McpGatewaySkill extends SkillBase {
+  /**
+   * @param config - Optional configuration (reserved for future MCP server settings).
+   */
   constructor(config?: SkillConfig) {
     super('mcp_gateway', config);
   }
 
+  /** @returns Manifest with placeholder metadata for the MCP gateway. */
   getManifest(): SkillManifest {
     return {
       name: 'mcp_gateway',
@@ -31,6 +42,7 @@ export class McpGatewaySkill extends SkillBase {
     };
   }
 
+  /** @returns A single placeholder `mcp_invoke` tool (not yet functional). */
   getTools(): SkillToolDefinition[] {
     return [
       {
@@ -61,6 +73,7 @@ export class McpGatewaySkill extends SkillBase {
     ];
   }
 
+  /** @returns Prompt section explaining the MCP gateway placeholder status. */
   getPromptSections(): SkillPromptSection[] {
     return [
       {
@@ -78,6 +91,8 @@ export class McpGatewaySkill extends SkillBase {
 
 /**
  * Factory function for creating McpGatewaySkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new McpGatewaySkill instance.
  */
 export function createSkill(config?: SkillConfig): McpGatewaySkill {
   return new McpGatewaySkill(config);

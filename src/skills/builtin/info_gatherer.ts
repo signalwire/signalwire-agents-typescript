@@ -16,25 +16,44 @@ import type {
 } from '../SkillBase.js';
 import { SwaigFunctionResult } from '../../SwaigFunctionResult.js';
 
+/** Definition of a single data field to be collected from the user. */
 interface FieldDefinition {
+  /** Field name used as the parameter key. */
   name: string;
+  /** Description of what this field collects. */
   description: string;
+  /** Whether this field must be provided. */
   required?: boolean;
+  /** Optional regex pattern for validating the field value. */
   validation?: string;
+  /** Parameter type for the tool schema (defaults to "string"). */
   type?: string;
 }
 
+/** Key-value map of information gathered from a user during a call. */
 interface GatheredInfo {
   [key: string]: unknown;
 }
 
+/**
+ * Collects structured information from the user based on configurable fields.
+ *
+ * Tier 2 built-in skill with no external dependencies. Dynamically generates
+ * a `save_info` tool based on the `fields` config array. Fields support
+ * optional validation patterns and required/optional flags. Data is stored
+ * per-call and optionally merged into global data.
+ */
 export class InfoGathererSkill extends SkillBase {
   private gatheredData: Map<string, GatheredInfo> = new Map();
 
+  /**
+   * @param config - Optional configuration; supports `fields`, `purpose`, `confirmation_message`, `store_globally`.
+   */
   constructor(config?: SkillConfig) {
     super('info_gatherer', config);
   }
 
+  /** @returns Manifest with config schema for fields, purpose, confirmation_message, and store_globally. */
   getManifest(): SkillManifest {
     return {
       name: 'info_gatherer',
@@ -85,6 +104,7 @@ export class InfoGathererSkill extends SkillBase {
     };
   }
 
+  /** @returns A `save_info` tool (dynamic params from config) and a `get_gathered_info` retrieval tool. */
   getTools(): SkillToolDefinition[] {
     const fields = this.getConfig<FieldDefinition[]>('fields', []);
     const confirmationMessage = this.getConfig<string>(
@@ -223,6 +243,7 @@ export class InfoGathererSkill extends SkillBase {
     return tools;
   }
 
+  /** @returns Prompt section listing required/optional fields and collection instructions. */
   getPromptSections(): SkillPromptSection[] {
     const fields = this.getConfig<FieldDefinition[]>('fields', []);
     const purpose = this.getConfig<string | undefined>('purpose', undefined);
@@ -280,7 +301,8 @@ export class InfoGathererSkill extends SkillBase {
   }
 
   /**
-   * Get all gathered data (useful for external access after call completion).
+   * Get all gathered data, keyed by call ID.
+   * @returns A copy of the internal gathered data map.
    */
   getAllGatheredData(): Map<string, GatheredInfo> {
     return new Map(this.gatheredData);
@@ -288,6 +310,7 @@ export class InfoGathererSkill extends SkillBase {
 
   /**
    * Clear gathered data for a specific call or all calls.
+   * @param callId - If provided, clear data for this call only; otherwise clear all.
    */
   clearGatheredData(callId?: string): void {
     if (callId) {
@@ -300,6 +323,8 @@ export class InfoGathererSkill extends SkillBase {
 
 /**
  * Factory function for creating InfoGathererSkill instances.
+ * @param config - Optional skill configuration.
+ * @returns A new InfoGathererSkill instance.
  */
 export function createSkill(config?: SkillConfig): InfoGathererSkill {
   return new InfoGathererSkill(config);

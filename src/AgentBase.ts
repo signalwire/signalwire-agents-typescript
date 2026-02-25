@@ -26,11 +26,20 @@ import type {
   DynamicConfigCallback,
 } from './types.js';
 
+/**
+ * Core agent class that composes an HTTP server, prompt management, session handling,
+ * SWAIG tool registry, and 5-phase SWML rendering into a single deployable unit.
+ */
 export class AgentBase {
+  /** Display name of this agent. */
   name: string;
+  /** HTTP route path this agent listens on. */
   route: string;
+  /** Hostname the HTTP server binds to. */
   host: string;
+  /** Port number the HTTP server listens on. */
   port: number;
+  /** Unique identifier for this agent instance. */
   agentId: string;
 
   // Internal managers
@@ -88,7 +97,7 @@ export class AgentBase {
   private _proxyUrlBaseFromEnv = !!process.env['SWML_PROXY_URL_BASE'];
   private _proxyDebug = process.env['SWML_PROXY_DEBUG'] === 'true';
 
-  // Logger
+  /** Structured logger instance for this agent, configurable via SIGNALWIRE_LOG_LEVEL. */
   protected log = getLogger('AgentBase');
 
   // Skills
@@ -97,6 +106,10 @@ export class AgentBase {
   // Hono app
   private _app: Hono | null = null;
 
+  /**
+   * Create a new AgentBase instance.
+   * @param opts - Agent configuration options including name, route, auth, and call settings.
+   */
   constructor(opts: AgentOptions) {
     this.name = opts.name;
     this.route = (opts.route ?? '/').replace(/\/+$/, '') || '/';
@@ -160,16 +173,32 @@ export class AgentBase {
 
   // ── Prompt methods ──────────────────────────────────────────────────
 
+  /**
+   * Set the main system prompt text for the AI.
+   * @param text - The prompt text to use.
+   * @returns This agent instance for chaining.
+   */
   setPromptText(text: string): this {
     this.promptManager.setPromptText(text);
     return this;
   }
 
+  /**
+   * Set the post-prompt text evaluated after the call ends.
+   * @param text - The post-prompt text to use.
+   * @returns This agent instance for chaining.
+   */
   setPostPrompt(text: string): this {
     this.promptManager.setPostPrompt(text);
     return this;
   }
 
+  /**
+   * Add a new section to the prompt with optional body, bullets, and subsections.
+   * @param title - Section heading.
+   * @param opts - Optional section content including body text, bullet points, and subsections.
+   * @returns This agent instance for chaining.
+   */
   promptAddSection(
     title: string,
     opts?: {
@@ -184,6 +213,12 @@ export class AgentBase {
     return this;
   }
 
+  /**
+   * Append content to an existing prompt section.
+   * @param title - Title of the section to append to.
+   * @param opts - Content to add: body text, a single bullet, or multiple bullets.
+   * @returns This agent instance for chaining.
+   */
   promptAddToSection(
     title: string,
     opts?: { body?: string; bullet?: string; bullets?: string[] },
@@ -192,25 +227,50 @@ export class AgentBase {
     return this;
   }
 
+  /**
+   * Add a subsection under an existing prompt section.
+   * @param parentTitle - Title of the parent section.
+   * @param title - Title of the new subsection.
+   * @param opts - Optional body text and bullet points for the subsection.
+   * @returns This agent instance for chaining.
+   */
   promptAddSubsection(parentTitle: string, title: string, opts?: { body?: string; bullets?: string[] }): this {
     this.promptManager.addSubsection(parentTitle, title, opts);
     return this;
   }
 
+  /**
+   * Check whether a prompt section with the given title exists.
+   * @param title - Section title to look for.
+   * @returns True if the section exists.
+   */
   promptHasSection(title: string): boolean {
     return this.promptManager.hasSection(title);
   }
 
+  /**
+   * Get the fully rendered main prompt text.
+   * @returns The assembled prompt string.
+   */
   getPrompt(): string {
     return this.promptManager.getPrompt();
   }
 
+  /**
+   * Get the post-prompt text, if one has been set.
+   * @returns The post-prompt string, or null if not configured.
+   */
   getPostPrompt(): string | null {
     return this.promptManager.getPostPrompt();
   }
 
   // ── Contexts ────────────────────────────────────────────────────────
 
+  /**
+   * Define or replace the contexts configuration for the AI verb.
+   * @param contexts - An existing ContextBuilder instance or a plain object; a new ContextBuilder is created if omitted.
+   * @returns The active ContextBuilder for further configuration.
+   */
   defineContexts(contexts?: ContextBuilder | Record<string, unknown>): ContextBuilder {
     if (contexts instanceof ContextBuilder) {
       this.contextsBuilder = contexts;
@@ -222,21 +282,41 @@ export class AgentBase {
 
   // ── AI config methods ───────────────────────────────────────────────
 
+  /**
+   * Add a single speech-recognition hint.
+   * @param hint - Word or phrase to boost in speech recognition.
+   * @returns This agent instance for chaining.
+   */
   addHint(hint: string): this {
     this.hints.push(hint);
     return this;
   }
 
+  /**
+   * Add multiple speech-recognition hints at once.
+   * @param hints - Array of words or phrases to boost.
+   * @returns This agent instance for chaining.
+   */
   addHints(hints: string[]): this {
     this.hints.push(...hints);
     return this;
   }
 
+  /**
+   * Add a pattern-based speech-recognition hint with find-and-replace behavior.
+   * @param opts - Pattern hint configuration with regex pattern, replacement, and optional case flag.
+   * @returns This agent instance for chaining.
+   */
   addPatternHint(opts: { pattern: string; replace: string; ignoreCase?: boolean }): this {
     this.hints.push(opts as unknown as string);
     return this;
   }
 
+  /**
+   * Add a supported language to the AI configuration.
+   * @param config - Language configuration including name, code, voice, and optional fillers.
+   * @returns This agent instance for chaining.
+   */
   addLanguage(config: LanguageConfig): this {
     const lang: Record<string, unknown> = {
       name: config.name,
@@ -251,12 +331,22 @@ export class AgentBase {
     return this;
   }
 
+  /**
+   * Replace all configured languages with a new list.
+   * @param languages - Array of language configurations.
+   * @returns This agent instance for chaining.
+   */
   setLanguages(languages: LanguageConfig[]): this {
     this.languages = [];
     for (const l of languages) this.addLanguage(l);
     return this;
   }
 
+  /**
+   * Add a pronunciation override rule for the TTS engine.
+   * @param rule - Pronunciation rule specifying the text to replace and its substitute.
+   * @returns This agent instance for chaining.
+   */
   addPronunciation(rule: PronunciationRule): this {
     const r: Record<string, unknown> = { replace: rule.replace, with: rule.with };
     if (rule.ignoreCase) r['ignore_case'] = rule.ignoreCase;
@@ -264,31 +354,64 @@ export class AgentBase {
     return this;
   }
 
+  /**
+   * Set a single AI parameter (e.g. "temperature", "top_p").
+   * @param key - Parameter name.
+   * @param value - Parameter value.
+   * @returns This agent instance for chaining.
+   */
   setParam(key: string, value: unknown): this {
     this.params[key] = value;
     return this;
   }
 
+  /**
+   * Merge multiple AI parameters into the existing params object.
+   * @param params - Key-value pairs to merge.
+   * @returns This agent instance for chaining.
+   */
   setParams(params: Record<string, unknown>): this {
     Object.assign(this.params, params);
     return this;
   }
 
+  /**
+   * Replace the entire global_data object passed into the AI configuration.
+   * @param data - New global data object.
+   * @returns This agent instance for chaining.
+   */
   setGlobalData(data: Record<string, unknown>): this {
     this.globalData = data;
     return this;
   }
 
+  /**
+   * Merge additional entries into the existing global_data object.
+   * @param data - Key-value pairs to merge into global data.
+   * @returns This agent instance for chaining.
+   */
   updateGlobalData(data: Record<string, unknown>): this {
     Object.assign(this.globalData, data);
     return this;
   }
 
+  /**
+   * Set the list of native SWAIG function names (built-in platform functions).
+   * @param funcs - Array of native function names.
+   * @returns This agent instance for chaining.
+   */
   setNativeFunctions(funcs: string[]): this {
     this.nativeFunctions = funcs;
     return this;
   }
 
+  /**
+   * Add internal filler phrases spoken while a specific function is executing.
+   * @param functionName - Name of the SWAIG function these fillers apply to.
+   * @param languageCode - BCP-47 language code for the fillers.
+   * @param fillers - Array of filler phrases.
+   * @returns This agent instance for chaining.
+   */
   addInternalFiller(functionName: string, languageCode: string, fillers: string[]): this {
     if (!this.internalFillers[functionName]) {
       this.internalFillers[functionName] = {};
@@ -297,6 +420,13 @@ export class AgentBase {
     return this;
   }
 
+  /**
+   * Add a remote SWAIG function include reference.
+   * @param url - URL of the remote SWAIG endpoint.
+   * @param functions - Function names available at that endpoint.
+   * @param metaData - Optional metadata to attach to the include.
+   * @returns This agent instance for chaining.
+   */
   addFunctionInclude(url: string, functions: string[], metaData?: Record<string, unknown>): this {
     const inc: FunctionInclude = { url, functions };
     if (metaData) inc.meta_data = metaData;
@@ -304,16 +434,31 @@ export class AgentBase {
     return this;
   }
 
+  /**
+   * Merge LLM-specific parameters into the main prompt configuration (e.g. model, temperature).
+   * @param params - Key-value LLM parameters to merge.
+   * @returns This agent instance for chaining.
+   */
   setPromptLlmParams(params: Record<string, unknown>): this {
     Object.assign(this.promptLlmParams, params);
     return this;
   }
 
+  /**
+   * Merge LLM-specific parameters into the post-prompt configuration.
+   * @param params - Key-value LLM parameters to merge.
+   * @returns This agent instance for chaining.
+   */
   setPostPromptLlmParams(params: Record<string, unknown>): this {
     Object.assign(this.postPromptLlmParams, params);
     return this;
   }
 
+  /**
+   * Enable debug event webhooks for this agent.
+   * @param level - Debug verbosity level (defaults to 1).
+   * @returns This agent instance for chaining.
+   */
   enableDebugEvents(level = 1): this {
     this.debugEventsEnabled = true;
     this.debugEventsLevel = level;
@@ -322,6 +467,11 @@ export class AgentBase {
 
   // ── Tools ───────────────────────────────────────────────────────────
 
+  /**
+   * Register a SWAIG tool (function) that the AI can invoke during a call.
+   * @param opts - Tool definition including name, description, parameter schema, and handler callback.
+   * @returns This agent instance for chaining.
+   */
   defineTool(opts: {
     name: string;
     description: string;
@@ -348,6 +498,10 @@ export class AgentBase {
     return this;
   }
 
+  /**
+   * Get a summary of all registered tools with their names, descriptions, and parameter schemas.
+   * @returns Array of tool descriptors.
+   */
   getRegisteredTools(): { name: string; description: string; parameters: Record<string, unknown> }[] {
     const tools: { name: string; description: string; parameters: Record<string, unknown> }[] = [];
     for (const [name, fn] of this.toolRegistry) {
@@ -364,11 +518,21 @@ export class AgentBase {
     return tools;
   }
 
+  /**
+   * Look up a registered SwaigFunction by name.
+   * @param name - The tool name to search for.
+   * @returns The SwaigFunction instance, or undefined if not found or not a SwaigFunction.
+   */
   getTool(name: string): SwaigFunction | undefined {
     const fn = this.toolRegistry.get(name);
     return fn instanceof SwaigFunction ? fn : undefined;
   }
 
+  /**
+   * Register a pre-built SwaigFunction instance or a raw function descriptor (e.g. DataMap).
+   * @param fn - A SwaigFunction instance or a plain object with a "function" key.
+   * @returns This agent instance for chaining.
+   */
   registerSwaigFunction(fn: SwaigFunction | Record<string, unknown>): this {
     if (fn instanceof SwaigFunction) {
       this.toolRegistry.set(fn.name, fn);
@@ -381,47 +545,91 @@ export class AgentBase {
 
   // ── Call flow ───────────────────────────────────────────────────────
 
+  /**
+   * Add a SWML verb to execute before the answer phase (phase 1).
+   * @param verbName - Name of the SWML verb (e.g. "play", "record").
+   * @param config - Verb configuration object.
+   * @returns This agent instance for chaining.
+   */
   addPreAnswerVerb(verbName: string, config: Record<string, unknown>): this {
     this.preAnswerVerbs.push([verbName, config]);
     return this;
   }
 
+  /**
+   * Configure the answer verb (phase 2) with optional settings.
+   * @param config - Optional answer verb configuration.
+   * @returns This agent instance for chaining.
+   */
   addAnswerVerb(config?: Record<string, unknown>): this {
     this.answerConfig = config ?? {};
     return this;
   }
 
+  /**
+   * Add a SWML verb to execute after the answer phase but before the AI verb (phase 3).
+   * @param verbName - Name of the SWML verb.
+   * @param config - Verb configuration object.
+   * @returns This agent instance for chaining.
+   */
   addPostAnswerVerb(verbName: string, config: Record<string, unknown>): this {
     this.postAnswerVerbs.push([verbName, config]);
     return this;
   }
 
+  /**
+   * Add a SWML verb to execute after the AI verb (phase 5).
+   * @param verbName - Name of the SWML verb.
+   * @param config - Verb configuration object.
+   * @returns This agent instance for chaining.
+   */
   addPostAiVerb(verbName: string, config: Record<string, unknown>): this {
     this.postAiVerbs.push([verbName, config]);
     return this;
   }
 
+  /**
+   * Remove all pre-answer verbs.
+   * @returns This agent instance for chaining.
+   */
   clearPreAnswerVerbs(): this {
     this.preAnswerVerbs = [];
     return this;
   }
 
+  /**
+   * Remove all post-answer verbs.
+   * @returns This agent instance for chaining.
+   */
   clearPostAnswerVerbs(): this {
     this.postAnswerVerbs = [];
     return this;
   }
 
+  /**
+   * Remove all post-AI verbs.
+   * @returns This agent instance for chaining.
+   */
   clearPostAiVerbs(): this {
     this.postAiVerbs = [];
     return this;
   }
 
+  /**
+   * Get the agent's display name.
+   * @returns The agent name string.
+   */
   getName(): string {
     return this.name;
   }
 
   // ── Skills ─────────────────────────────────────────────────────────
 
+  /**
+   * Add a skill to this agent, registering its tools, prompt sections, hints, and global data.
+   * @param skill - The skill instance to add.
+   * @returns This agent instance for chaining.
+   */
   async addSkill(skill: SkillBase): Promise<this> {
     await this.skillManager.addSkill(skill);
 
@@ -446,25 +654,49 @@ export class AgentBase {
     return this;
   }
 
+  /**
+   * Remove a previously added skill by its instance ID.
+   * @param instanceId - The unique instance ID of the skill to remove.
+   * @returns True if the skill was found and removed.
+   */
   async removeSkill(instanceId: string): Promise<boolean> {
     return this.skillManager.removeSkill(instanceId);
   }
 
+  /**
+   * List all registered skills with their names, instance IDs, and initialization status.
+   * @returns Array of skill descriptors.
+   */
   listSkills(): { name: string; instanceId: string; initialized: boolean }[] {
     return this.skillManager.listSkills();
   }
 
+  /**
+   * Check whether a skill with the given name is registered.
+   * @param skillName - The skill name to check.
+   * @returns True if a skill with that name exists.
+   */
   hasSkill(skillName: string): boolean {
     return this.skillManager.hasSkill(skillName);
   }
 
   // ── Dynamic config ──────────────────────────────────────────────────
 
+  /**
+   * Set a callback invoked on each SWML request to dynamically modify an ephemeral agent copy.
+   * @param cb - The dynamic configuration callback.
+   * @returns This agent instance for chaining.
+   */
   setDynamicConfigCallback(cb: DynamicConfigCallback): this {
     this.dynamicConfigCallback = cb;
     return this;
   }
 
+  /**
+   * Add extra query parameters appended to all SWAIG webhook URLs.
+   * @param params - Key-value pairs to append as query parameters.
+   * @returns This agent instance for chaining.
+   */
   addSwaigQueryParams(params: Record<string, string>): this {
     Object.assign(this.swaigQueryParams, params);
     return this;
@@ -472,6 +704,11 @@ export class AgentBase {
 
   // ── Proxy detection ────────────────────────────────────────────────
 
+  /**
+   * Manually set the proxy base URL used for webhook URL generation.
+   * @param url - The external-facing base URL (trailing slashes are stripped).
+   * @returns This agent instance for chaining.
+   */
   manualSetProxyUrl(url: string): this {
     this._proxyUrlBase = url.replace(/\/+$/, '');
     this._proxyUrlBaseFromEnv = false;
@@ -528,16 +765,31 @@ export class AgentBase {
 
   // ── URL ─────────────────────────────────────────────────────────────
 
+  /**
+   * Override the default SWAIG webhook URL with a custom one.
+   * @param url - The custom webhook URL.
+   * @returns This agent instance for chaining.
+   */
   setWebHookUrl(url: string): this {
     this.webHookUrlOverride = url;
     return this;
   }
 
+  /**
+   * Override the default post-prompt webhook URL with a custom one.
+   * @param url - The custom post-prompt URL.
+   * @returns This agent instance for chaining.
+   */
   setPostPromptUrl(url: string): this {
     this.postPromptUrlOverride = url;
     return this;
   }
 
+  /**
+   * Get the full external URL of this agent, using the proxy base URL if available.
+   * @param includeAuth - Whether to embed basic-auth credentials in the URL (defaults to false).
+   * @returns The fully-qualified URL string.
+   */
   getFullUrl(includeAuth = false): string {
     if (this._proxyUrlBase) {
       let base = this._proxyUrlBase.replace(/\/+$/, '');
@@ -570,30 +822,59 @@ export class AgentBase {
 
   // ── Lifecycle hooks (override in subclass) ──────────────────────────
 
+  /**
+   * Lifecycle hook called when a post-prompt summary is received. Override in subclasses.
+   * @param _summary - Parsed summary object, or null if extraction failed.
+   * @param _rawData - The full raw post-prompt payload.
+   */
   onSummary(_summary: Record<string, unknown> | null, _rawData: Record<string, unknown>): void | Promise<void> {
     // Default no-op
   }
 
+  /**
+   * Lifecycle hook called on every SWML request before rendering. Override in subclasses.
+   * @param _rawData - The parsed request body.
+   */
   onSwmlRequest(_rawData: Record<string, unknown>): void | Promise<void> {
     // Default no-op
   }
 
+  /**
+   * Lifecycle hook called when a debug event webhook is received. Override in subclasses.
+   * @param _event - The debug event payload.
+   */
   onDebugEvent(_event: Record<string, unknown>): void | Promise<void> {
     // Default no-op
   }
 
-  /** Override to add custom basic auth validation logic */
+  /**
+   * Override to add custom basic-auth validation logic beyond credential matching.
+   * @param _username - The username from the request.
+   * @param _password - The password from the request.
+   * @returns True if the credentials are valid; false to reject the request.
+   */
   validateBasicAuth(_username: string, _password: string): boolean | Promise<boolean> {
     return true;
   }
 
-  /** Pre-execution hook called before each SWAIG function. Override in subclasses. */
+  /**
+   * Pre-execution hook called before each SWAIG function. Override in subclasses.
+   * @param _name - Name of the function about to execute.
+   * @param _args - Parsed arguments for the function.
+   * @param _rawData - The full raw SWAIG request payload.
+   */
   onFunctionCall(_name: string, _args: Record<string, unknown>, _rawData: Record<string, unknown>): void | Promise<void> {
     // Default no-op
   }
 
   // ── 5-phase SWML rendering ─────────────────────────────────────────
 
+  /**
+   * Render the complete SWML document by assembling all 5 phases: pre-answer, answer,
+   * post-answer, AI, and post-AI verbs.
+   * @param callId - Optional call ID to use for session tokens; auto-generated if omitted.
+   * @returns The rendered SWML document as a JSON string.
+   */
   renderSwml(callId?: string): string {
     this.swmlBuilder.reset();
 
@@ -763,6 +1044,10 @@ export class AgentBase {
 
   // ── Hono HTTP app ───────────────────────────────────────────────────
 
+  /**
+   * Get or lazily create the Hono HTTP application with all routes, middleware, auth, and CORS.
+   * @returns The configured Hono application instance.
+   */
   getApp(): Hono {
     if (this._app) return this._app;
 
@@ -933,10 +1218,18 @@ export class AgentBase {
     return app;
   }
 
+  /**
+   * Return this agent's Hono app for mounting as a sub-router in an AgentServer.
+   * @returns The Hono application instance.
+   */
   asRouter(): Hono {
     return this.getApp();
   }
 
+  /**
+   * Start the HTTP server and begin listening for requests.
+   * @returns A promise that resolves once the server is running.
+   */
   async serve(): Promise<void> {
     const { serve: honoServe } = await import('@hono/node-server');
     const app = this.getApp();
@@ -945,7 +1238,10 @@ export class AgentBase {
     honoServe({ fetch: app.fetch, port: this.port, hostname: this.host });
   }
 
-  /** Alias for serve() */
+  /**
+   * Alias for {@link serve}. Starts the HTTP server.
+   * @returns A promise that resolves once the server is running.
+   */
   async run(): Promise<void> {
     return this.serve();
   }
@@ -969,7 +1265,11 @@ export class AgentBase {
     return null;
   }
 
-  /** Get basic auth credentials, optionally including their source */
+  /**
+   * Get the basic-auth credentials used by this agent.
+   * @param includeSource - When true, a third element indicating the credential source is appended.
+   * @returns A tuple of [username, password] or [username, password, source].
+   */
   getBasicAuthCredentials(includeSource?: false): [string, string];
   getBasicAuthCredentials(includeSource: true): [string, string, 'provided' | 'environment' | 'generated'];
   getBasicAuthCredentials(includeSource?: boolean): [string, string] | [string, string, 'provided' | 'environment' | 'generated'] {

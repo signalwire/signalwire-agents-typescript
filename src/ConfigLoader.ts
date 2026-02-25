@@ -10,10 +10,15 @@ import { resolve, join } from 'node:path';
 
 const ENV_VAR_PATTERN = /\$\{([^}|]+)(?:\|([^}]*))?\}/g;
 
+/** JSON configuration file loader with environment variable interpolation and dot-notation access. */
 export class ConfigLoader {
   private data: Record<string, unknown> = {};
   private filePath: string | null = null;
 
+  /**
+   * Create a new ConfigLoader, optionally loading a JSON file immediately.
+   * @param filePath - Path to a JSON config file to load on construction.
+   */
   constructor(filePath?: string) {
     if (filePath) {
       this.load(filePath);
@@ -21,8 +26,9 @@ export class ConfigLoader {
   }
 
   /**
-   * Load config from a JSON file.
-   * Supports ${VAR|default} env var interpolation in string values.
+   * Load configuration from a JSON file, performing `${VAR|default}` env var interpolation on the raw text.
+   * @param filePath - Path to the JSON config file.
+   * @returns This instance for chaining.
    */
   load(filePath: string): this {
     const absPath = resolve(filePath);
@@ -37,8 +43,9 @@ export class ConfigLoader {
   }
 
   /**
-   * Search for a config file in standard locations.
-   * Searches: CWD, ./config, $HOME/.signalwire
+   * Search for a config file in standard locations (CWD, `./config`, `$HOME/.signalwire`).
+   * @param filename - The config file name to search for.
+   * @returns A loaded ConfigLoader if found, or null if the file does not exist in any search path.
    */
   static search(filename: string): ConfigLoader | null {
     const searchPaths = [
@@ -57,8 +64,10 @@ export class ConfigLoader {
   }
 
   /**
-   * Get a value using dot-notation path.
-   * Example: get('server.port') returns config.server.port
+   * Retrieve a configuration value using a dot-notation path (e.g. `'server.port'`).
+   * @param path - Dot-separated key path into the config object.
+   * @param defaultValue - Value returned when the path does not exist.
+   * @returns The resolved value, or defaultValue if not found.
    */
   get<T = unknown>(path: string, defaultValue?: T): T {
     const parts = path.split('.');
@@ -75,7 +84,10 @@ export class ConfigLoader {
   }
 
   /**
-   * Set a value using dot-notation path.
+   * Set a configuration value at the given dot-notation path, creating intermediate objects as needed.
+   * @param path - Dot-separated key path into the config object.
+   * @param value - The value to store.
+   * @returns This instance for chaining.
    */
   set(path: string, value: unknown): this {
     const parts = path.split('.');
@@ -94,7 +106,9 @@ export class ConfigLoader {
   }
 
   /**
-   * Check if a path exists in the config.
+   * Check whether a dot-notation path exists in the loaded configuration.
+   * @param path - Dot-separated key path to check.
+   * @returns True if the path resolves to a defined value.
    */
   has(path: string): boolean {
     const parts = path.split('.');
@@ -111,21 +125,25 @@ export class ConfigLoader {
   }
 
   /**
-   * Get the entire config data.
+   * Return a shallow copy of the entire configuration object.
+   * @returns A copy of the top-level config data.
    */
   getAll(): Record<string, unknown> {
     return { ...this.data };
   }
 
   /**
-   * Get the file path that was loaded.
+   * Return the absolute path of the loaded config file, if any.
+   * @returns The file path, or null if config was loaded from an object.
    */
   getFilePath(): string | null {
     return this.filePath;
   }
 
   /**
-   * Load from a plain object (for testing or programmatic config).
+   * Load configuration from a plain object instead of a file, useful for testing or programmatic setup.
+   * @param obj - The configuration object to use.
+   * @returns This instance for chaining.
    */
   loadFromObject(obj: Record<string, unknown>): this {
     this.data = { ...obj };
