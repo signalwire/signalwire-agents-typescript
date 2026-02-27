@@ -19,10 +19,10 @@ export class SessionManager {
 
   /**
    * Create a new SessionManager.
-   * @param tokenExpirySecs - Token validity duration in seconds (default 3600).
+   * @param tokenExpirySecs - Token validity duration in seconds (default 900).
    * @param secretKey - HMAC signing secret; a random key is generated if omitted.
    */
-  constructor(tokenExpirySecs = 3600, secretKey?: string) {
+  constructor(tokenExpirySecs = 900, secretKey?: string) {
     this.tokenExpirySecs = tokenExpirySecs;
     this.secretKey = secretKey ?? randomBytes(32).toString('hex');
   }
@@ -83,7 +83,10 @@ export class SessionManager {
       }
       const [tokenCallId, tokenFunction, tokenExpiry, tokenNonce, tokenSignature] = parts;
 
-      const effectiveCallId = callId || tokenCallId;
+      if (!callId) {
+        this.log.warn('token_rejected_no_call_id', { function: functionName });
+        return false;
+      }
       if (tokenFunction !== functionName) {
         this.log.warn('token_function_mismatch', { expected: functionName, got: tokenFunction });
         return false;
@@ -103,8 +106,8 @@ export class SessionManager {
         this.log.warn('token_invalid', { function: functionName });
         return false;
       }
-      if (tokenCallId !== effectiveCallId) {
-        this.log.warn('token_call_id_mismatch', { expected: effectiveCallId, got: tokenCallId });
+      if (tokenCallId !== callId) {
+        this.log.warn('token_call_id_mismatch', { expected: callId, got: tokenCallId });
         return false;
       }
 

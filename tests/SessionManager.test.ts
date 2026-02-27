@@ -75,11 +75,16 @@ describe('SessionManager', () => {
     expect(sm.validateToolToken(fn, token, callId)).toBe(true);
   });
 
-  it('validates token when callId is empty (uses token callId)', () => {
+  it('rejects token when callId is empty', () => {
     const sm = new SessionManager();
     const token = sm.generateToken('fn', 'call-1');
-    // Empty callId should use token's embedded callId
-    expect(sm.validateToken('', 'fn', token)).toBe(true);
+    // Empty callId should be rejected to prevent token reuse across calls
+    expect(sm.validateToken('', 'fn', token)).toBe(false);
+  });
+
+  it('default token expiry is 900 seconds', () => {
+    const sm = new SessionManager();
+    expect(sm.tokenExpirySecs).toBe(900);
   });
 
   // ── Pass 1: debugToken + session metadata ────────────────────────

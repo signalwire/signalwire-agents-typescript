@@ -819,6 +819,137 @@ describe('AgentBase', () => {
     expect(text).not.toContain('real_tool');
   });
 
+  it('invalid token returns 200 with SwaigFunctionResult (not 403)', async () => {
+    const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+    agent.defineTool({
+      name: 'secure_fn',
+      description: 'Secure function',
+      parameters: {},
+      handler: () => new SwaigFunctionResult('ok'),
+      secure: true,
+    });
+    const app = agent.getApp();
+
+    // Missing token
+    const res1 = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'secure_fn', argument: {} }),
+    });
+    expect(res1.status).toBe(200);
+    const body1 = await res1.json();
+    expect(body1.response).toContain('security token');
+
+    // Invalid token
+    const res2 = await app.request('/swaig?__token=bogus_token', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'secure_fn', argument: {} }),
+    });
+    expect(res2.status).toBe(200);
+    const body2 = await res2.json();
+    expect(body2.response).toContain('security token');
+  });
+
+  it('rejects function names with invalid characters', async () => {
+    const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+    agent.setPromptText('hello');
+    const app = agent.getApp();
+
+    // SQL injection attempt
+    const res1 = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'valid_fn; DROP TABLE', argument: {} }),
+    });
+    expect(res1.status).toBe(400);
+
+    // Names starting with numbers
+    const res2 = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: '123invalid', argument: {} }),
+    });
+    expect(res2.status).toBe(400);
+
+    // Valid names should pass the format check (still 404 since not registered)
+    const res3 = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'valid_fn_name', argument: {} }),
+    });
+    expect(res3.status).toBe(404); // not registered, but passed format validation
+  });
+
+  it('non-object argument is coerced to empty object', async () => {
+    const captured: Record<string, unknown>[] = [];
+    const agent = new AgentBase({ name: 'test', route: '/', basicAuth: ['u', 'p'] });
+    agent.defineTool({
+      name: 'arg_test',
+      description: 'Test args',
+      parameters: {},
+      handler: (_args, _params, _body) => {
+        captured.push(_args);
+        return new SwaigFunctionResult('ok');
+      },
+    });
+    const app = agent.getApp();
+
+    // String argument
+    const res1 = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'arg_test', argument: 'not-an-object' }),
+    });
+    expect(res1.status).toBe(200);
+
+    // Array argument
+    const res2 = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'arg_test', argument: [1, 2, 3] }),
+    });
+    expect(res2.status).toBe(200);
+
+    // Null argument
+    const res3 = await app.request('/swaig', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa('u:p'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ function: 'arg_test', argument: null }),
+    });
+    expect(res3.status).toBe(200);
+
+    // All non-object arguments should be coerced to {}
+    expect(captured.length).toBe(3);
+    for (const args of captured) {
+      expect(args).toEqual({});
+    }
+  });
+
   it('auto-generated password is 32 hex chars', () => {
     const savedUser = process.env['SWML_BASIC_AUTH_USER'];
     const savedPass = process.env['SWML_BASIC_AUTH_PASSWORD'];

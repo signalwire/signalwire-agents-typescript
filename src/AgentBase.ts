@@ -135,7 +135,7 @@ export class AgentBase {
     }
 
     this.promptManager = new PromptManager(opts.usePom ?? true);
-    this.sessionManager = new SessionManager(opts.tokenExpirySecs ?? 3600);
+    this.sessionManager = new SessionManager(opts.tokenExpirySecs ?? 900);
     this.swmlBuilder = new SwmlBuilder();
 
     // Setup auth
@@ -1251,6 +1251,10 @@ export class AgentBase {
       const fnName = body['function'] as string;
       if (!fnName) return c.json({ error: 'Missing function name' }, 400);
       if (fnName.length > 128) return c.json({ error: 'Invalid function name' }, 400);
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(fnName)) {
+        reqLog.warn('invalid_function_name_format', { function: fnName });
+        return c.json({ error: 'Invalid function name' }, 400);
+      }
 
       reqLog = reqLog.bind({ function: fnName });
       reqLog.debug('function_call_received');
@@ -1270,16 +1274,26 @@ export class AgentBase {
         const token = url.searchParams.get('__token') ?? url.searchParams.get('token');
         if (!token) {
           reqLog.warn('missing_token');
-          return c.json({ error: 'Invalid or expired token' }, 403);
+          const result = new SwaigFunctionResult(
+            'The security token for this function is missing or expired. This action cannot be completed.'
+          );
+          return c.json(result.toDict());
         }
         if (!this.sessionManager.validateToken(callIdStr, fnName, token)) {
           reqLog.warn('token_invalid');
-          return c.json({ error: 'Invalid or expired token' }, 403);
+          const result = new SwaigFunctionResult(
+            'The security token for this function is invalid or expired. This action cannot be completed.'
+          );
+          return c.json(result.toDict());
         }
         reqLog.debug('token_valid');
       }
 
-      const args = (body['argument'] as Record<string, unknown>) ?? {};
+      const rawArgs = body['argument'];
+      const args: Record<string, unknown> =
+        (rawArgs !== null && typeof rawArgs === 'object' && !Array.isArray(rawArgs))
+          ? rawArgs as Record<string, unknown>
+          : {};
       reqLog.debug('executing_function', { args: JSON.stringify(args) });
       await this.onFunctionCall(fnName, args, body);
 

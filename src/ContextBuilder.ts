@@ -5,6 +5,9 @@
  * completion criteria, function restrictions, and navigation rules.
  */
 
+const MAX_CONTEXTS = 50;
+const MAX_STEPS_PER_CONTEXT = 100;
+
 // ── GatherQuestion ──────────────────────────────────────────────────
 
 /** Represents a single question within a gather operation. */
@@ -424,6 +427,9 @@ export class Context {
       validSteps?: string[];
     },
   ): Step {
+    if (this.steps.size >= MAX_STEPS_PER_CONTEXT) {
+      throw new Error(`Maximum steps per context (${MAX_STEPS_PER_CONTEXT}) exceeded`);
+    }
     if (this.steps.has(name)) throw new Error(`Step '${name}' already exists in context '${this.name}'`);
     const step = new Step(name);
     this.steps.set(name, step);
@@ -728,6 +734,9 @@ export class ContextBuilder {
    * @returns The newly created Context for further configuration.
    */
   addContext(name: string): Context {
+    if (this.contexts.size >= MAX_CONTEXTS) {
+      throw new Error(`Maximum number of contexts (${MAX_CONTEXTS}) exceeded`);
+    }
     if (this.contexts.has(name)) throw new Error(`Context '${name}' already exists`);
     const ctx = new Context(name);
     this.contexts.set(name, ctx);
