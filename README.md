@@ -412,6 +412,32 @@ npm run test:watch   # Watch mode
 npm run dev          # Watch + rebuild
 ```
 
+### Contributing Changes
+
+This project uses [changesets](https://github.com/changesets/changesets) to manage versioning and changelogs. Every pull request that changes runtime behavior must include a changeset.
+
+**Adding a changeset:**
+
+```bash
+npx changeset
+```
+
+You'll be prompted to:
+
+1. Select the package (`signalwire-agents`)
+2. Choose the semver bump type:
+   - **patch** — bug fixes, internal changes
+   - **minor** — new features, non-breaking additions
+   - **major** — breaking API changes
+3. Write a short summary of your changes
+
+This creates a markdown file in `.changeset/` that should be committed with your PR. The CI pipeline will fail if a changeset is missing.
+
+**What happens after your PR merges:**
+
+1. A "Release PR" is automatically created (or updated) with the version bump and changelog entry
+2. When the team merges the Release PR, the package is published to npm and a GitHub Release is created
+
 ## License
 
 MIT
