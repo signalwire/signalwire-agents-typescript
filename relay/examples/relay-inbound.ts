@@ -9,10 +9,10 @@
  *   SIGNALWIRE_SPACE      - Your SignalWire space (e.g. example.signalwire.com)
  *
  * Usage:
- *   npx tsx examples/relay-inbound.ts
+ *   npx tsx relay/examples/relay-inbound.ts
  */
 
-import { RelayClient, Call, CALL_STATE_ENDED } from '../src/relay/index.js';
+import { RelayClient, Call, CALL_STATE_ENDED } from '../../src/relay/index.js';
 
 const client = new RelayClient({
   contexts: ['office'],

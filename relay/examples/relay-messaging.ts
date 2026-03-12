@@ -11,10 +11,10 @@
  *   MSG_FROM              - Sender number in E.164 format (must be owned by your project)
  *
  * Usage:
- *   MSG_TO=+15551234567 MSG_FROM=+15559876543 npx tsx examples/relay-messaging.ts
+ *   MSG_TO=+15551234567 MSG_FROM=+15559876543 npx tsx relay/examples/relay-messaging.ts
  */
 
-import { RelayClient, Message } from '../src/relay/index.js';
+import { RelayClient, Message } from '../../src/relay/index.js';
 
 const to = process.env.MSG_TO;
 const from = process.env.MSG_FROM;

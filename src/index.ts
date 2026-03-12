@@ -112,3 +112,6 @@ export type {
 
 // RELAY Client (real-time call/message control over WebSocket)
 export * from './relay/index.js';
+
+// REST Client (typed HTTP access to all SignalWire platform APIs)
+export * from './rest/index.js';
